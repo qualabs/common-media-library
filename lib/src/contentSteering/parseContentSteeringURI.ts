@@ -1,7 +1,6 @@
 // Function to parse the M3U8 manifest and extract the content steering server URI
-export async function parseContentSteeringURI(): Promise<string | null> {
+export async function parseContentSteeringURI(manifest: string): Promise<string | null> {
 	try {
-		const manifest = await getManifest(manifestUrl);
 		const lines = manifest.split(/\r?\n/);
 		const steeringLine = lines.find((line) =>
 			line.startsWith('#EXT-X-CONTENT-STEERING:')

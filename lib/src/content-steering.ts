@@ -1,2 +1,2 @@
-export { parseM3u8ontentSteeringURI } from './contentSteering/parseM3u8ontentSteeringURI.js';
-export { callContentSteeringServer } from './contentSteering/callContentSteeringServer.js';
+export { parseM3u8ContentSteeringURI } from './contentsteering/parseM3u8ContentSteeringURI.js';
+export { callContentSteeringServer } from './contentsteering/callContentSteeringServer.js';

@@ -1,6 +1,6 @@
 interface ContentSteeringServerResponse {
 	status: number;
-	data: string;
+	data: JSON;
 	headers: Record<string, string>;
 	url: string;
 }
@@ -20,7 +20,7 @@ export async function callContentSteeringServer(
 		const response = await fetch(serverURI, {
 			signal: AbortSignal.timeout(timeout),
 		});
-		const data = await response.text();
+		const data = await response.json();
 
 		const headers: Record<string, string> = {};
 		response.headers.forEach((value, key) => {

@@ -6,8 +6,8 @@ export class ContentSteeringResponse {
 	pathwayClones: any;
 
 	constructor(response?: any) {
-		this.version = response.VERSION ?? null;
-		this.ttl = response.TTL ?? 300;
+		this.version = response?.VERSION ?? null;
+		this.ttl = response?.TTL ?? 300;
 		this.reloadUri = response?.['RELOAD-URI'] ?? null;
 		this.pathwayPriority = response?.['PATHWAY-PRIORITY'] ?? null;
 		this.pathwayClones = response?.['PATHWAY-CLONES'] ?? [];

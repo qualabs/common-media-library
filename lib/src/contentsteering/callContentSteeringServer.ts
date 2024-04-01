@@ -44,7 +44,7 @@ export async function callContentSteeringServer(
 			onError(ContentSteeringServerResponse);
 		}
 	} 
-	catch (error: any) {
+	catch (error) {
 		if (error instanceof DOMException) {
 			if (error.name === 'AbortError') {
 				console.log('The fetch request was aborted.');

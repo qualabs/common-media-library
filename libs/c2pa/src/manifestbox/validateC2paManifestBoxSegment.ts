@@ -1,0 +1,117 @@
+import { readC2paManifest } from '../readC2paManifest.ts'
+import { bytesToHex } from '../utils.ts'
+import type { ManifestBoxValidationResult } from './ManifestBoxValidation.ts'
+
+const LIVE_VIDEO_ASSERTION_LABEL = 'c2pa.livevideo.segment'
+const BMFF_HASH_ASSERTION_LABEL = 'c2pa.hash.bmff.v3'
+const MANIFEST_ID_PREFIX_PATTERN = /^(xmp:iid:|urn:uuid:)/i
+
+function normalizeManifestId(id: string | null): string | null {
+	if (!id) return null
+	return id.replace(MANIFEST_ID_PREFIX_PATTERN, '').toLowerCase()
+}
+
+function extractAssertionData(data: unknown): Record<string, unknown> | null {
+	if (data !== null && typeof data === 'object' && !Array.isArray(data)) {
+		return data as Record<string, unknown>
+	}
+	return null
+}
+
+/**
+ * Validates a C2PA manifest-box live stream segment.
+ *
+ * Parses the C2PA manifest embedded in the segment and validates:
+ * - Presence of the `c2pa.livevideo.segment` assertion
+ * - Continuity of the `previousManifestId` chain
+ * - Presence of the `c2pa.hash.bmff.v3` assertion
+ *
+ * This function is **pure** — it does not access any external state. The
+ * caller is responsible for persisting `nextManifestId` between calls.
+ *
+ * @param bytes - Raw segment bytes
+ * @param lastManifestId - Manifest ID from the previous segment, or null for the first segment
+ * @returns Validation result and the manifest ID to persist for the next call
+ *
+ * @example
+ * {@includeCode ../../test/manifestbox/validateC2paManifestBoxSegment.test.ts#example}
+ *
+ * @public
+ */
+export function validateC2paManifestBoxSegment(
+	bytes: Uint8Array,
+	lastManifestId: string | null,
+): { readonly result: ManifestBoxValidationResult; readonly nextManifestId: string | null } {
+	let manifest = null
+	let issuer: string | null = null
+	let sequenceNumber: number | null = null
+	let previousManifestId: string | null = null
+	let bmffHashHex: string | null = null
+	let claimSignatureValid = false
+	let hasLiveVideoAssertion = false
+
+	try {
+		manifest = readC2paManifest(bytes)
+		const activeManifest = manifest?.activeManifest
+
+		if (activeManifest) {
+			claimSignatureValid = true
+			issuer = activeManifest.signatureInfo?.issuer ?? null
+
+			const liveVideoAssertion = activeManifest.assertions?.find(
+				a => a.label === LIVE_VIDEO_ASSERTION_LABEL,
+			)
+			if (liveVideoAssertion) {
+				hasLiveVideoAssertion = true
+				const liveVideoData = extractAssertionData(liveVideoAssertion.data)
+				const rawSeq = liveVideoData?.['sequenceNumber']
+				sequenceNumber = typeof rawSeq === 'number' ? rawSeq : null
+				const rawPrev = liveVideoData?.['previousManifestId']
+				previousManifestId = typeof rawPrev === 'string' ? rawPrev : null
+			}
+
+			const hashAssertion = activeManifest.assertions?.find(
+				a => a.label === BMFF_HASH_ASSERTION_LABEL,
+			)
+			if (hashAssertion) {
+				const hashData = extractAssertionData(hashAssertion.data)
+				const rawHash = hashData?.['hash'] ?? hashData?.['value']
+				if (rawHash instanceof Uint8Array) {
+					bmffHashHex = bytesToHex(rawHash)
+				} else if (Array.isArray(rawHash)) {
+					bmffHashHex = bytesToHex(new Uint8Array(rawHash as number[]))
+				}
+			}
+		}
+	} catch {
+		claimSignatureValid = false
+	}
+
+	const currentManifestId = manifest?.activeManifest?.instanceId ?? null
+
+	let chainValid: boolean
+	if (!lastManifestId) {
+		chainValid = hasLiveVideoAssertion
+	} else {
+		chainValid =
+			!!previousManifestId &&
+			normalizeManifestId(previousManifestId) === normalizeManifestId(lastManifestId)
+	}
+
+	const isValid = claimSignatureValid && hasLiveVideoAssertion && chainValid
+
+	return {
+		result: {
+			manifest,
+			issuer,
+			sequenceNumber,
+			previousManifestId,
+			bmffHashHex,
+			claimSignatureValid,
+			hasLiveVideoAssertion,
+			chainValid,
+			isValid,
+		},
+		nextManifestId: currentManifestId ?? lastManifestId,
+	}
+}

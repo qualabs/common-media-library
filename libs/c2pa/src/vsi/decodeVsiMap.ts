@@ -9,12 +9,6 @@ function normalizeAlgorithmName(rawAlg: string): string {
 	return rawAlg.replace(SHA_ALGORITHM_PATTERN, 'SHA-$1')
 }
 
-function toUint8Array(value: unknown): Uint8Array {
-	if (value instanceof Uint8Array) return value
-	if (Array.isArray(value)) return new Uint8Array(value as number[])
-	return new Uint8Array()
-}
-
 /**
  * Decodes a C2PA Verifiable Segment Info (VSI) CBOR map from raw bytes.
  *
@@ -51,10 +45,10 @@ export function decodeVsiMap(vsiCborBytes: Uint8Array): VsiMap {
 	return {
 		sequenceNumber: Number(sequenceNumber),
 		bmffHash: {
-			hash: toUint8Array(bmffHashRaw['hash']),
+			hash: bmffHashRaw['hash'] as Uint8Array,
 			alg,
 			exclusions,
 		},
-		manifestId: toUint8Array(manifestId),
+		manifestId: manifestId as Uint8Array,
 	}
 }

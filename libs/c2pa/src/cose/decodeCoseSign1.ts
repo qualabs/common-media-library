@@ -8,12 +8,6 @@ const COSE_SIGN1_ARRAY_LENGTH = 4
 const COSE_KEY_KID = 4
 const COSE_KEY_ALG = 1
 
-function stripTrailingZeros(bytes: Uint8Array): Uint8Array {
-	let end = bytes.length
-	while (end > 0 && bytes[end - 1] === 0x00) end--
-	return end < bytes.length ? bytes.slice(0, end) : bytes
-}
-
 function stripCoseTag(bytes: Uint8Array): Uint8Array {
 	if (bytes[0] === COSE_SIGN1_TAG_SINGLE_BYTE) return bytes.slice(1)
 	if (bytes[0] === COSE_SIGN1_TAG_TWO_BYTE_FIRST && bytes[1] === COSE_SIGN1_TAG_TWO_BYTE_SECOND) return bytes.slice(2)
@@ -43,7 +37,7 @@ function toUint8Array(value: unknown): Uint8Array {
  */
 export function decodeCoseSign1(coseBytes: Uint8Array): CoseSign1 {
 	try {
-		const stripped = stripCoseTag(stripTrailingZeros(coseBytes))
+		const stripped = stripCoseTag(coseBytes)
 		const coseArray = decode(stripped) as unknown
 
 		if (!Array.isArray(coseArray) || coseArray.length !== COSE_SIGN1_ARRAY_LENGTH) {

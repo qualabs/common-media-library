@@ -1,3 +1,5 @@
+import type { IsoBoxReadView, ParsedIsoBox } from '@svta/cml-iso-bmff'
+
 const MILLISECONDS_PER_SECOND = 1000
 
 /**
@@ -25,6 +27,56 @@ export function bytesToHex(bytes: Uint8Array): string {
 export function isKeyExpired(createdAt: string, validityPeriodSeconds: number, now: Date = new Date()): boolean {
 	const validityEnd = new Date(new Date(createdAt).getTime() + validityPeriodSeconds * MILLISECONDS_PER_SECOND)
 	return now > validityEnd
+}
+
+// C2PA manifest store UUID per C2PA specification
+const C2PA_MANIFEST_UUID: readonly number[] = [
+	0xd8, 0xfe, 0xc3, 0xd6, 0x1a, 0x96, 0x4f, 0x32,
+	0xa0, 0xf6, 0xf3, 0xec, 0xf9, 0x6c, 0x10, 0xea,
+]
+
+// JUMBF UUID per ISO 19566-5 (used by c2pa-rs and other JUMBF-compliant tools)
+const JUMBF_UUID: readonly number[] = [
+	0xd8, 0xfe, 0xc3, 0xd6, 0x1b, 0x0e, 0x48, 0x3c,
+	0x92, 0x97, 0x58, 0x28, 0x87, 0x7e, 0xc4, 0x81,
+]
+
+function matchesUuid(usertype: readonly number[], expected: readonly number[]): boolean {
+	return usertype.length === expected.length && expected.every((b, i) => b === usertype[i])
+}
+
+function isC2paUuid(usertype: readonly number[]): boolean {
+	return matchesUuid(usertype, C2PA_MANIFEST_UUID) || matchesUuid(usertype, JUMBF_UUID)
+}
+
+/**
+ * A parsed ISO BMFF box with a UUID type.
+ *
+ * `ParsedIsoBox` does not include 'uuid' in its type union because UUID boxes
+ * are not part of the standard `IsoBoxMap`. This type represents the structural
+ * shape needed to work with UUID boxes at runtime.
+ *
+ * @internal
+ */
+export type UuidParsedBox = {
+	type: string
+	usertype?: number[]
+	view: IsoBoxReadView
+	size: number
+}
+
+/**
+ * Finds the C2PA UUID box in a list of parsed ISO BMFF boxes.
+ *
+ * Matches against both the C2PA manifest store UUID and the JUMBF UUID
+ * (ISO 19566-5), as different tools use different UUIDs.
+ *
+ * @internal
+ */
+export function findC2paUuidBox(boxes: ParsedIsoBox[]): UuidParsedBox | undefined {
+	return (boxes as UuidParsedBox[]).find(
+		box => box.type === 'uuid' && isC2paUuid(box.usertype ?? []),
+	)
 }
 
 const FULLBOX_HEADER_SIZE = 4

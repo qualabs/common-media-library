@@ -18,7 +18,7 @@ describe('convertCoseKeyToJwk', () => {
 		strictEqual(jwk.kty, 'EC')
 		strictEqual(jwk.crv, 'P-256')
 		ok(typeof jwk.x === 'string' && jwk.x.length > 0)
-		ok(typeof jwk.y === 'string' && jwk.y!.length > 0)
+		ok(typeof jwk.y === 'string' && jwk.y.length > 0)
 	})
 	// #endregion example
 
@@ -39,9 +39,8 @@ describe('convertCoseKeyToJwk', () => {
 	it('converts a plain-object COSE key', () => {
 		const x = new Uint8Array(32).fill(0x11)
 		const y = new Uint8Array(32).fill(0x22)
-		const coseKey = { 1: 2, '-1': 2, '-2': x, '-3': y }
 		// Object with mixed keys — kty from int key 1
-		const coseMap = new Map([[1, 2], [-1, 2], [-2, x], [-3, y]])
+		const coseMap = new Map<number, unknown>([[1, 2], [-1, 2], [-2, x], [-3, y]])
 		const jwk = convertCoseKeyToJwk(coseMap)
 		strictEqual(jwk.kty, 'EC')
 		strictEqual(jwk.crv, 'P-384')

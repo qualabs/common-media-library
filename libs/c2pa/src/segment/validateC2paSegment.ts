@@ -10,7 +10,7 @@ import type { SegmentValidationResult } from './SegmentValidation.ts'
 
 const KEY_TYPE_OKP = 'OKP'
 
-function resolveImportAlgorithm(jwk: { kty: string; crv: string }): AlgorithmIdentifier {
+function resolveImportAlgorithm(jwk: { kty: string; crv: string }): AlgorithmIdentifier | EcKeyImportParams {
 	return jwk.kty === KEY_TYPE_OKP ? { name: jwk.crv } : { name: 'ECDSA', namedCurve: jwk.crv }
 }
 

@@ -21,19 +21,19 @@ type Asn1Element = {
 
 function readLength(bytes: Uint8Array, offset: number): { length: number, bytesRead: number } {
 	if (offset >= bytes.length) return { length: 0, bytesRead: 0 }
-	const first = bytes[offset]!
+	const first = bytes[offset] ?? 0
 	if (first < ASN1_LONG_FORM_FLAG) return { length: first, bytesRead: 1 }
 	const count = first & ASN1_LONG_FORM_MASK
 	let length = 0
 	for (let i = 0; i < count; i++) {
-		length = (length << 8) | bytes[offset + 1 + i]!
+		length = (length << 8) | (bytes[offset + 1 + i] ?? 0)
 	}
 	return { length, bytesRead: 1 + count }
 }
 
 function readElement(bytes: Uint8Array, offset: number): Asn1Element | null {
 	if (offset + 2 > bytes.length) return null
-	const tag = bytes[offset]!
+	const tag = bytes[offset] ?? 0
 	const { length, bytesRead } = readLength(bytes, offset + 1)
 	const headerSize = 1 + bytesRead
 	const valueEnd = offset + headerSize + length

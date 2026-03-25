@@ -18,7 +18,7 @@ function coseGet(key: CoseKeyLike, intKey: number): unknown {
 function toBase64Url(value: unknown): string {
 	const bytes = value instanceof Uint8Array ? value : new Uint8Array(value as number[])
 	let binary = ''
-	for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+	for (const byte of bytes) binary += String.fromCharCode(byte)
 	return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
 }
 

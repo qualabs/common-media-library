@@ -10,7 +10,7 @@ describe('verifySignerBinding', () => {
 
 		// Export the public key as JWK to build a COSE key structure
 		const jwk = await crypto.subtle.exportKey('jwk', keyPair.publicKey)
-		const xBytes = Uint8Array.from(atob(jwk.x!.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0))
+		const xBytes = Uint8Array.from(atob((jwk.x ?? '').replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0))
 
 		// Build a minimal COSE key map (kty=1 OKP, crv=6 Ed25519)
 		const sessionCoseKey = new Map<number, unknown>([

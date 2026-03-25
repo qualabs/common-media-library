@@ -6,28 +6,8 @@ import { decodeCoseSign1 } from './cose/decodeCoseSign1.ts'
 import type { JumbfBox } from './jumbf/JumbfBox.ts'
 import { parseJumbfBoxes } from './jumbf/parseJumbfBoxes.ts'
 import { parseJumbfLabel } from './jumbf/parseJumbfLabel.ts'
-import { stripJumbfUuidPrefix } from './utils.ts'
+import { findC2paUuidBox, stripJumbfUuidPrefix } from './utils.ts'
 import { extractCertificateInfo } from './x509/extractCertificateInfo.ts'
-
-// C2PA manifest store UUID per C2PA specification
-const C2PA_MANIFEST_UUID: readonly number[] = [
-	0xd8, 0xfe, 0xc3, 0xd6, 0x1a, 0x96, 0x4f, 0x32,
-	0xa0, 0xf6, 0xf3, 0xec, 0xf9, 0x6c, 0x10, 0xea,
-]
-
-// JUMBF UUID per ISO 19566-5 (used by c2pa-rs and other JUMBF-compliant tools)
-const JUMBF_UUID: readonly number[] = [
-	0xd8, 0xfe, 0xc3, 0xd6, 0x1b, 0x0e, 0x48, 0x3c,
-	0x92, 0x97, 0x58, 0x28, 0x87, 0x7e, 0xc4, 0x81,
-]
-
-function matchesUuid(usertype: readonly number[], expected: readonly number[]): boolean {
-	return usertype.length === expected.length && expected.every((byte, i) => byte === usertype[i])
-}
-
-function isC2paUuid(usertype: readonly number[]): boolean {
-	return matchesUuid(usertype, C2PA_MANIFEST_UUID) || matchesUuid(usertype, JUMBF_UUID)
-}
 
 
 function resolveManifestBoxes(jumbfBoxes: JumbfBox[]): JumbfBox[] {
@@ -36,8 +16,9 @@ function resolveManifestBoxes(jumbfBoxes: JumbfBox[]): JumbfBox[] {
 
 	// Single jumb wrapping — unwrap one level and recurse
 	// This handles: store jumb → manifest jumb → claim/assertions/signature
-	if (contentBoxes.length === 1 && contentBoxes[0]!.type === 'jumb') {
-		return resolveManifestBoxes(parseJumbfBoxes(contentBoxes[0]!.data))
+	const firstBox = contentBoxes[0]
+	if (contentBoxes.length === 1 && firstBox?.type === 'jumb') {
+		return resolveManifestBoxes(parseJumbfBoxes(firstBox.data))
 	}
 
 	// Multiple content boxes — these are the manifest parts (claim, assertions, signature)
@@ -119,10 +100,7 @@ function parseAssertions(assertionStoreBoxes: JumbfBox[]): C2paAssertion[] {
  */
 export function readC2paManifest(bytes: Uint8Array): C2paManifestStore {
 	const boxes = readIsoBoxes(bytes)
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- uuid boxes are not in the cml-iso-bmff type union
-	const uuidBox = (boxes as any[]).find(
-		(box: { type: string; usertype?: number[] }) => box.type === 'uuid' && isC2paUuid(box.usertype ?? []),
-	)
+	const uuidBox = findC2paUuidBox(boxes)
 
 	if (!uuidBox) {
 		throw new Error('No C2PA UUID box found in the provided bytes')

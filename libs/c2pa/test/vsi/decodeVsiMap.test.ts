@@ -1,5 +1,5 @@
 import { decodeVsiMap } from '@svta/cml-c2pa'
-import { ok, strictEqual, throws } from 'node:assert'
+import { throws } from 'node:assert'
 import { describe, it } from 'node:test'
 
 describe('decodeVsiMap', () => {

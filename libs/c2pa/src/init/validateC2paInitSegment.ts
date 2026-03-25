@@ -86,7 +86,9 @@ async function validateBmffHashAssertion(
 	if (!rawHash) return true
 	const expectedHash =
 		rawHash instanceof Uint8Array ? rawHash : new Uint8Array(rawHash as number[])
-	const alg = (data['alg'] as string | undefined) ?? 'sha256'
+	let alg = (data['alg'] as string | undefined) ?? 'SHA-256'
+	// Normalize algorithm name for WebCrypto (e.g., 'sha256' -> 'SHA-256')
+	if (alg.toLowerCase() === 'sha256') alg = 'SHA-256'
 	const exclusions = (data['exclusions'] as BmffHashExclusion[] | undefined) ?? []
 	return validateBmffHash(bytes, expectedHash, { exclusions, alg })
 }

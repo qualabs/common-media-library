@@ -36,14 +36,14 @@ describe('computeBmffHash', () => {
 		const hashWith = await computeBmffHash(segment)
 
 		ok(hashWithout.length === 32)
-		ok(!hashWithout.every((b, i) => b === hashWith[i]), 'hashes should differ when a box is excluded')
+		ok(!hashWithout.every((b: number, i: number) => b === hashWith[i]), 'hashes should differ when a box is excluded')
 	})
 
 	it('produces different hashes with and without offset prefix', async () => {
 		const segment = buildMinimalBox('moof')
 		const hashNoPrefix = await computeBmffHash(segment, { offsetPrefixSize: 0 })
 		const hashWithPrefix = await computeBmffHash(segment, { offsetPrefixSize: 8 })
-		ok(!hashNoPrefix.every((b, i) => b === hashWithPrefix[i]))
+		ok(!hashNoPrefix.every((b: number, i: number) => b === hashWithPrefix[i]))
 	})
 
 	it('returns empty hash for empty segment', async () => {

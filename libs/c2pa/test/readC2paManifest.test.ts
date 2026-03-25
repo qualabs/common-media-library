@@ -1,4 +1,5 @@
 import { readC2paManifest } from '@svta/cml-c2pa'
+import type { C2paAssertion } from '@svta/cml-c2pa'
 import { strictEqual, ok, doesNotThrow, throws } from 'node:assert'
 import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
@@ -41,7 +42,7 @@ describe('readC2paManifest', () => {
 		doesNotThrow(() => readC2paManifest(bytes))
 
 		const { activeManifest } = readC2paManifest(bytes)
-		const liveVideoAssertion = activeManifest.assertions.find(a => a.label === 'c2pa.livevideo.segment')
+		const liveVideoAssertion = activeManifest.assertions.find((a: C2paAssertion) => a.label === 'c2pa.livevideo.segment')
 
 		ok(liveVideoAssertion !== undefined, 'c2pa.livevideo.segment assertion should be present')
 	})

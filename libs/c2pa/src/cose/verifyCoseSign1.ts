@@ -71,7 +71,7 @@ function normalizeSignature(signature: Uint8Array, publicKey: CryptoKey): Uint8A
  * @param payload - Payload bytes to verify. May differ from `coseSign1.payload` for detached payloads.
  * @param publicKey - Imported public key for verification
  * @returns `true` if the signature is valid
- * @throws {Error} If the key algorithm is not supported
+ * @throws If the key algorithm is not supported
  *
  * @example
  * {@includeCode ../../test/cose/verifyCoseSign1.test.ts#example}

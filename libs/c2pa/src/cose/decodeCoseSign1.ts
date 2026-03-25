@@ -28,7 +28,7 @@ function toUint8Array(value: unknown): Uint8Array {
  *
  * @param coseBytes - Raw COSE_Sign1 bytes, optionally prefixed with CBOR tag 18
  * @returns The decoded COSE_Sign1 structure
- * @throws {Error} If the bytes do not represent a valid COSE_Sign1 structure
+ * @throws If the bytes do not represent a valid COSE_Sign1 structure
  *
  * @example
  * {@includeCode ../../test/cose/decodeCoseSign1.test.ts#example}

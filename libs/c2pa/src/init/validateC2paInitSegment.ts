@@ -162,7 +162,7 @@ async function validateSessionKeys(
  *
  * @param bytes - Raw init segment bytes (must not contain an `mdat` box)
  * @returns Structured validation result
- * @throws {Error} If the bytes contain an `mdat` box, or if no C2PA UUID box is found
+ * @throws If the bytes contain an `mdat` box, or if no C2PA UUID box is found
  *
  * @example
  * {@includeCode ../../test/init/validateC2paInitSegment.test.ts#example}

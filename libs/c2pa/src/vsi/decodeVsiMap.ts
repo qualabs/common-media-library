@@ -16,7 +16,7 @@ function normalizeAlgorithmName(rawAlg: string): string {
  *
  * @param vsiCborBytes - Raw CBOR-encoded VSI map bytes from the EMSG `messageData`
  * @returns The decoded VSI map
- * @throws {Error} If the bytes are not a valid VSI CBOR map
+ * @throws If the bytes are not a valid VSI CBOR map
  *
  * @example
  * {@includeCode ../../test/vsi/decodeVsiMap.test.ts#example}

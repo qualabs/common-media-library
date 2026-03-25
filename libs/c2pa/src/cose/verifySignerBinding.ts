@@ -20,7 +20,7 @@ function resolveImportAlgorithm(jwk: CoseKeyJwk): AlgorithmIdentifier | EcKeyImp
  * @param sessionCoseKey - COSE public key from the `c2pa.session-keys` assertion
  * @param signerCertBytes - DER-encoded end-entity certificate (from `x5chain`)
  * @returns `true` if the signer binding signature is valid
- * @throws {Error} If the COSE key type is not supported or decoding fails
+ * @throws If the COSE key type is not supported or decoding fails
  *
  * @example
  * {@includeCode ../../test/cose/verifySignerBinding.test.ts#example}

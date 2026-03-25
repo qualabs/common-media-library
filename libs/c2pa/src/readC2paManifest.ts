@@ -91,7 +91,7 @@ function parseAssertions(assertionStoreBoxes: JumbfBox[]): C2paAssertion[] {
  *
  * @param bytes - Raw BMFF bytes (e.g. an MP4 init segment or media segment)
  * @returns The parsed C2PA manifest store
- * @throws {Error} If no C2PA UUID box is found, or the JUMBF structure is invalid
+ * @throws If no C2PA UUID box is found, or the JUMBF structure is invalid
  *
  * @example
  * {@includeCode ../test/readC2paManifest.test.ts#example}

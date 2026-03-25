@@ -19,7 +19,7 @@ export type SegmentValidationResult = {
   readonly signatureValid: boolean
   /** Whether the BMFF content hash matches the assertion */
   readonly hashValid: boolean
-  /** Whether the segment's sequence number is >= the key's minSequenceNumber */
+  /** Whether the segment's sequence number is \>= the key's minSequenceNumber */
   readonly sequenceAboveMin: boolean
   /** Whether the session key's validity period has expired */
   readonly keyExpired: boolean

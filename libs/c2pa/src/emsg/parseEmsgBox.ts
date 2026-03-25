@@ -77,7 +77,7 @@ function parseEmsgV1(payload: Uint8Array, view: DataView, flags: number): EmsgBo
  *
  * @param payload - EMSG box payload starting with version byte
  * @returns The parsed EMSG box
- * @throws {Error} If the payload is too small or uses an unsupported version
+ * @throws If the payload is too small or uses an unsupported version
  *
  * @example
  * {@includeCode ../../test/emsg/parseEmsgBox.test.ts#example}

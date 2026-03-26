@@ -1,20 +1,6 @@
 import type { SequenceState, SequenceValidationResult } from './SequenceState.ts'
 
 /**
- * Creates the initial (empty) sequence state for a new stream.
- *
- * @returns A {@link SequenceState} with no history
- *
- * @example
- * {@includeCode ../../test/vsi/validateSequenceNumber.test.ts#example}
- *
- * @public
- */
-export function createSequenceState(): SequenceState {
-	return { lastSequenceNumber: null, seenSequences: new Set() }
-}
-
-/**
  * Validates a segment's sequence number against the current stream state
  * per C2PA Live Streaming Specification §18.4.
  *

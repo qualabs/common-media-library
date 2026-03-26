@@ -1,8 +1,7 @@
-import { createSequenceState, validateC2paSegment } from '@svta/cml-c2pa'
-import { strictEqual } from 'node:assert'
+import { createSequenceState, LiveVideoStatusCode, validateC2paSegment } from '@svta/cml-c2pa'
+import { deepStrictEqual, strictEqual } from 'node:assert'
 import { describe, it } from 'node:test'
 
-// Minimal stubs matching the CoseSign1 and VsiMap shapes
 const stubCoseSign1 = {
 	protectedBytes: new Uint8Array(0),
 	protectedHeader: {},
@@ -21,7 +20,7 @@ const stubVsiMap = {
 
 describe('validateC2paSegment', () => {
 	// #region example
-	it('returns keyFound=false when sessionKey is null', async () => {
+	it('returns SEGMENT_INVALID when sessionKey is null', async () => {
 		const state = createSequenceState()
 		const { result, nextSequenceState } = await validateC2paSegment(
 			new Uint8Array(0),
@@ -31,10 +30,8 @@ describe('validateC2paSegment', () => {
 			state,
 		)
 
-		strictEqual(result.keyFound, false)
-		strictEqual(result.signatureValid, false)
-		strictEqual(result.hashValid, false)
-		strictEqual(result.vsiValid, false)
+		strictEqual(result.isValid, false)
+		deepStrictEqual(result.errorCodes, [LiveVideoStatusCode.SEGMENT_INVALID])
 		strictEqual(nextSequenceState !== state, true)
 	})
 	// #endregion example

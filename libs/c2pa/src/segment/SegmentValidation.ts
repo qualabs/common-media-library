@@ -1,3 +1,4 @@
+import type { LiveVideoStatusCode } from '../LiveVideoStatusCode.ts'
 import type { SequenceValidationResult } from '../vsi/SequenceState.ts'
 
 /**
@@ -8,11 +9,7 @@ import type { SequenceValidationResult } from '../vsi/SequenceState.ts'
  * @public
  */
 export type SegmentValidationResult = {
-  readonly keyFound: boolean
-  readonly signatureValid: boolean
-  readonly hashValid: boolean
-  readonly sequenceAboveMin: boolean
-  readonly keyExpired: boolean
   readonly sequenceResult: SequenceValidationResult
-  readonly vsiValid: boolean
+  readonly isValid: boolean
+  readonly errorCodes: readonly LiveVideoStatusCode[]
 }

@@ -1,4 +1,5 @@
 import type { C2paManifestStore } from '../C2paManifest.ts'
+import type { LiveVideoStatusCode } from '../LiveVideoStatusCode.ts'
 
 /**
  * The result of validating a single C2PA manifest-box live stream segment.
@@ -15,13 +16,8 @@ export type ManifestBoxValidationResult = {
   readonly streamId: string | null
   readonly continuityMethod: string | null
   readonly bmffHashHex: string | null
-  readonly claimSignatureValid: boolean
-  readonly hasLiveVideoAssertion: boolean
-  readonly chainValid: boolean
-  readonly streamIdValid: boolean
-  readonly continuityMethodPresent: boolean
-  readonly sequenceNumberValid: boolean
   readonly isValid: boolean
+  readonly errorCodes: readonly LiveVideoStatusCode[]
 }
 
 /**

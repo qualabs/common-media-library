@@ -42,9 +42,6 @@ export type * from './manifestbox/ManifestBoxValidation.ts'
 
 // Status codes (C2PA §19.7)
 export * from './LiveVideoStatusCode.ts'
-export * from './status/toSegmentStatusCodes.ts'
-export * from './status/toManifestBoxStatusCodes.ts'
-export * from './status/toInitStatusCodes.ts'
 
 // Sub-modules: BMFF hashing
 export * from './bmff/computeBmffHash.ts'

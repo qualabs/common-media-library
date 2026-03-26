@@ -1,6 +1,7 @@
 import { decode, encode } from 'cbor-x'
 import { findIsoBox, readIsoBoxes } from '@svta/cml-iso-bmff'
 import type { C2paAssertion } from '../C2paAssertion.ts'
+import { LiveVideoStatusCode } from '../LiveVideoStatusCode.ts'
 import { readC2paManifest } from '../readC2paManifest.ts'
 import { extractManifestCertificate } from '../extractManifestCertificate.ts'
 import { validateBmffHash } from '../bmff/validateBmffHash.ts'
@@ -188,11 +189,17 @@ export async function validateC2paInitSegment(bytes: Uint8Array): Promise<InitSe
 			? await validateSessionKeys(sessionKeysAssertion, certificate)
 			: []
 
+	const codes = new Set<LiveVideoStatusCode>()
+	if (!bmffHashValid) codes.add(LiveVideoStatusCode.INIT_INVALID)
+	if (sessionKeys.length === 0) codes.add(LiveVideoStatusCode.SESSIONKEY_INVALID)
+	const errorCodes = [...codes]
+
 	return {
 		activeManifest,
 		certificate,
 		manifestId: activeManifest.label,
-		bmffHashValid,
 		sessionKeys,
+		isValid: errorCodes.length === 0,
+		errorCodes,
 	}
 }

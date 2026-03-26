@@ -1,5 +1,6 @@
 import type { C2paManifest } from '../C2paManifest.ts'
 import type { CoseKeyJwk } from '../cose/CoseKeyJwk.ts'
+import type { LiveVideoStatusCode } from '../LiveVideoStatusCode.ts'
 
 /**
  * A session key extracted and verified from a C2PA `c2pa.session-keys` assertion.
@@ -28,6 +29,7 @@ export type InitSegmentValidation = {
   readonly activeManifest: C2paManifest
   readonly certificate: Uint8Array | null
   readonly manifestId: string | null
-  readonly bmffHashValid: boolean
   readonly sessionKeys: readonly ValidatedSessionKey[]
+  readonly isValid: boolean
+  readonly errorCodes: readonly LiveVideoStatusCode[]
 }

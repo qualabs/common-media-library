@@ -1,5 +1,6 @@
 import type { CoseSign1 } from '../cose/CoseSign1.ts'
 import { verifyCoseSign1 } from '../cose/verifyCoseSign1.ts'
+import { LiveVideoStatusCode } from '../LiveVideoStatusCode.ts'
 import type { VsiMap } from '../vsi/VsiMap.ts'
 import type { SequenceState } from '../vsi/SequenceState.ts'
 import { validateSequenceNumber } from '../vsi/validateSequenceNumber.ts'
@@ -17,10 +18,9 @@ function resolveImportAlgorithm(jwk: { kty: string; crv: string }): AlgorithmIde
 /**
  * Validates a C2PA live stream segment against a known session key.
  *
- * Performs all cryptographic checks defined in the C2PA Live Streaming spec:
+ * Performs all cryptographic checks defined in the C2PA spec §19.7.3:
  * signature verification, BMFF content hash, sequence number floor, and
- * key validity period. Sequence anomaly detection (duplicate, out-of-order,
- * gap) is also performed using the provided immutable `sequenceState`.
+ * key validity period.
  *
  * This function is **pure** — it does not access any external state. The
  * caller is responsible for looking up the session key and persisting
@@ -45,7 +45,6 @@ export async function validateC2paSegment(
 	sessionKey: ValidatedSessionKey | null,
 	sequenceState: SequenceState,
 ): Promise<{ readonly result: SegmentValidationResult; readonly nextSequenceState: SequenceState }> {
-	const keyFound = sessionKey !== null
 	const minSequenceNumber = sessionKey?.minSequenceNumber ?? 0
 
 	const { result: sequenceResult, nextState: nextSequenceState } = validateSequenceNumber(
@@ -54,16 +53,12 @@ export async function validateC2paSegment(
 		minSequenceNumber,
 	)
 
-	if (!keyFound) {
+	if (!sessionKey) {
 		return {
 			result: {
-				keyFound: false,
-				signatureValid: false,
-				hashValid: false,
-				sequenceAboveMin: false,
-				keyExpired: false,
 				sequenceResult,
-				vsiValid: false,
+				isValid: false,
+				errorCodes: [LiveVideoStatusCode.SEGMENT_INVALID],
 			},
 			nextSequenceState,
 		}
@@ -88,10 +83,14 @@ export async function validateC2paSegment(
 
 	const sequenceAboveMin = vsi.sequenceNumber >= sessionKey.minSequenceNumber
 	const keyExpired = isKeyExpired(sessionKey.createdAt, sessionKey.validityPeriod)
-	const vsiValid = signatureValid && hashValid && sequenceAboveMin && !keyExpired
+
+	const codes = new Set<LiveVideoStatusCode>()
+	if (!signatureValid || !hashValid || !sequenceAboveMin) codes.add(LiveVideoStatusCode.SEGMENT_INVALID)
+	if (keyExpired) codes.add(LiveVideoStatusCode.SESSIONKEY_INVALID)
+	const errorCodes = [...codes]
 
 	return {
-		result: { keyFound: true, signatureValid, hashValid, sequenceAboveMin, keyExpired, sequenceResult, vsiValid },
+		result: { sequenceResult, isValid: errorCodes.length === 0, errorCodes },
 		nextSequenceState,
 	}
 }

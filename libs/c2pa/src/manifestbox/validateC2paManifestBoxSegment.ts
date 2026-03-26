@@ -1,3 +1,4 @@
+import { LiveVideoStatusCode } from '../LiveVideoStatusCode.ts'
 import { readC2paManifest } from '../readC2paManifest.ts'
 import { bytesToHex } from '../utils.ts'
 import type { ManifestBoxValidationResult, ManifestBoxValidationState } from './ManifestBoxValidation.ts'
@@ -21,13 +22,7 @@ function extractAssertionData(data: unknown): Record<string, unknown> | null {
 /**
  * Validates a C2PA manifest-box live stream segment.
  *
- * Parses the C2PA manifest embedded in the segment and validates:
- * - Presence of the `c2pa.livevideo.segment` assertion
- * - Continuity of the `previousManifestId` chain
- * - Presence of the `c2pa.hash.bmff.v3` assertion
- * - `streamId` consistency with the previous segment (§19.7.2)
- * - `sequenceNumber` strictly increasing (§19.7.2)
- * - `continuityMethod` field presence (§19.7.2)
+ * Parses the C2PA manifest embedded in the segment and validates per §19.7.1 and §19.7.2.
  *
  * This function is **pure** — it does not access any external state. The
  * caller is responsible for persisting `nextManifestId` and `nextState`
@@ -116,20 +111,19 @@ export function validateC2paManifestBoxSegment(
 
 	const streamIdValid =
 		state?.lastStreamId == null || streamId === state.lastStreamId
-
 	const continuityMethodPresent = continuityMethod !== null
-
 	const sequenceNumberValid =
 		state?.lastSequenceNumber == null ||
 		(sequenceNumber !== null && sequenceNumber > state.lastSequenceNumber)
 
-	const isValid =
-		claimSignatureValid &&
-		hasLiveVideoAssertion &&
-		chainValid &&
-		streamIdValid &&
-		continuityMethodPresent &&
-		sequenceNumberValid
+	const codes = new Set<LiveVideoStatusCode>()
+	if (!claimSignatureValid) codes.add(LiveVideoStatusCode.MANIFEST_INVALID)
+	if (!hasLiveVideoAssertion) codes.add(LiveVideoStatusCode.ASSERTION_INVALID)
+	if (!streamIdValid) codes.add(LiveVideoStatusCode.ASSERTION_INVALID)
+	if (!sequenceNumberValid) codes.add(LiveVideoStatusCode.ASSERTION_INVALID)
+	if (!continuityMethodPresent) codes.add(LiveVideoStatusCode.CONTINUITY_METHOD_INVALID)
+	if (!chainValid) codes.add(LiveVideoStatusCode.CONTINUITY_METHOD_INVALID)
+	const errorCodes = [...codes]
 
 	const nextState: ManifestBoxValidationState = {
 		lastStreamId: streamId ?? state?.lastStreamId ?? null,
@@ -145,13 +139,8 @@ export function validateC2paManifestBoxSegment(
 			streamId,
 			continuityMethod,
 			bmffHashHex,
-			claimSignatureValid,
-			hasLiveVideoAssertion,
-			chainValid,
-			streamIdValid,
-			continuityMethodPresent,
-			sequenceNumberValid,
-			isValid,
+			isValid: errorCodes.length === 0,
+			errorCodes,
 		},
 		nextManifestId: currentManifestId ?? lastManifestId,
 		nextState,

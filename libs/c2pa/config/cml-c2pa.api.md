@@ -126,8 +126,9 @@ export type InitSegmentValidation = {
     readonly activeManifest: C2paManifest;
     readonly certificate: Uint8Array | null;
     readonly manifestId: string | null;
-    readonly bmffHashValid: boolean;
     readonly sessionKeys: readonly ValidatedSessionKey[];
+    readonly isValid: boolean;
+    readonly errorCodes: readonly LiveVideoStatusCode[];
 };
 
 // @public
@@ -152,13 +153,8 @@ export type ManifestBoxValidationResult = {
     readonly streamId: string | null;
     readonly continuityMethod: string | null;
     readonly bmffHashHex: string | null;
-    readonly claimSignatureValid: boolean;
-    readonly hasLiveVideoAssertion: boolean;
-    readonly chainValid: boolean;
-    readonly streamIdValid: boolean;
-    readonly continuityMethodPresent: boolean;
-    readonly sequenceNumberValid: boolean;
     readonly isValid: boolean;
+    readonly errorCodes: readonly LiveVideoStatusCode[];
 };
 
 // @public
@@ -175,13 +171,9 @@ export function readC2paManifest(bytes: Uint8Array): C2paManifestStore;
 
 // @public
 export type SegmentValidationResult = {
-    readonly keyFound: boolean;
-    readonly signatureValid: boolean;
-    readonly hashValid: boolean;
-    readonly sequenceAboveMin: boolean;
-    readonly keyExpired: boolean;
     readonly sequenceResult: SequenceValidationResult;
-    readonly vsiValid: boolean;
+    readonly isValid: boolean;
+    readonly errorCodes: readonly LiveVideoStatusCode[];
 };
 
 // @public
@@ -203,15 +195,6 @@ export type SequenceValidationResult = {
     readonly missingFrom: number;
     readonly missingTo: number;
 };
-
-// @public
-export function toInitStatusCodes(result: InitSegmentValidation): readonly LiveVideoStatusCode[];
-
-// @public
-export function toManifestBoxStatusCodes(result: ManifestBoxValidationResult): readonly LiveVideoStatusCode[];
-
-// @public
-export function toSegmentStatusCodes(result: SegmentValidationResult): readonly LiveVideoStatusCode[];
 
 // @public
 export function validateBmffHash(segmentBytes: Uint8Array, expectedHash: Uint8Array, options?: BmffHashValidationOptions): Promise<boolean>;

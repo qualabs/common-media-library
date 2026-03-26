@@ -4,16 +4,14 @@ import { describe, it } from 'node:test'
 
 describe('validateC2paManifestBoxSegment', () => {
 	// #region example
-	it('returns isValid=false for empty bytes', () => {
+	it('returns isValid=false with errorCodes for empty bytes', () => {
 		const { result, nextManifestId } = validateC2paManifestBoxSegment(
 			new Uint8Array(0),
 			null,
 		)
 
 		strictEqual(result.isValid, false)
-		strictEqual(result.claimSignatureValid, false)
-		strictEqual(result.hasLiveVideoAssertion, false)
-		strictEqual(result.chainValid, false)
+		strictEqual(result.errorCodes.length > 0, true)
 		strictEqual(result.manifest, null)
 		strictEqual(nextManifestId, null)
 	})
@@ -38,12 +36,13 @@ describe('validateC2paManifestBoxSegment', () => {
 		strictEqual(nextManifestId, 'some-id')
 	})
 
-	it('chainValid=false when lastManifestId is set but previousManifestId is missing', () => {
+	it('includes CONTINUITY_METHOD_INVALID when lastManifestId is set but previousManifestId is missing', () => {
 		const { result } = validateC2paManifestBoxSegment(
 			new Uint8Array(0),
 			'previous-manifest-id',
 		)
 
-		strictEqual(result.chainValid, false)
+		strictEqual(result.isValid, false)
+		strictEqual(result.errorCodes.includes('livevideo.continuityMethod.invalid'), true)
 	})
 })

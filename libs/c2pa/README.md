@@ -2,6 +2,11 @@
 
 C2PA (Coalition for Content Provenance and Authenticity) live video validation for BMFF/MP4 containers.
 
+Supports both segment validation methods defined in the C2PA specification:
+
+- **§19.3 — Per-segment C2PA Manifest Box**: each segment embeds a full C2PA manifest with COSE signature
+- **§19.4 — Verifiable Segment Info (VSI/EMSG)**: the init segment carries the manifest and session keys; each media segment carries a lightweight signed EMSG box
+
 ## Installation
 
 ```bash
@@ -10,55 +15,64 @@ npm i @svta/cml-c2pa @svta/cml-iso-bmff cbor-x
 
 > **Note:** `@svta/cml-iso-bmff` and `cbor-x` are peer dependencies.
 
-## Quick start
+## Usage
 
-### Validate an init segment
+### §19.4 — Verifiable Segment Info method
 
-```typescript
-import { validateC2paInitSegment } from '@svta/cml-c2pa'
-
-const result = await validateC2paInitSegment(initSegmentBytes)
-// result.isValid      — all checks passed
-// result.errorCodes   — [] if valid, or C2PA failure codes (e.g. 'livevideo.init.invalid')
-// result.sessionKeys  — validated session keys (kid, JWK, validity period)
-// result.activeManifest — parsed C2PA manifest with assertions
-```
-
-### Validate a media segment (VSI/EMSG method)
+The init segment contains the C2PA manifest and session keys. Each media segment contains an EMSG box with a signed VSI map that is verified against the session keys.
 
 ```typescript
-import { validateC2paSegment } from '@svta/cml-c2pa'
+import { validateC2paInitSegment, validateC2paSegment } from '@svta/cml-c2pa'
 
-const validated = await validateC2paSegment(segmentBytes, sessionKeys)
-if (!validated) {
-  // No C2PA EMSG box found in segment
-  return
+// 1. Validate the init segment to extract session keys
+const init = await validateC2paInitSegment(initBytes)
+// init.isValid      — all checks passed
+// init.errorCodes   — [] if valid, or C2PA failure codes
+// init.sessionKeys  — validated session keys (kid, JWK, validity period)
+
+// 2. Validate each media segment with the session keys
+let sequenceState = undefined
+for (const segmentBytes of mediaSegments) {
+  const validated = await validateC2paSegment(segmentBytes, init.sessionKeys, sequenceState)
+
+  if (!validated) {
+    // No C2PA EMSG box found in this segment
+    continue
+  }
+
+  const { result, nextSequenceState } = validated
+  sequenceState = nextSequenceState
+
+  // result.isValid        — all crypto checks passed
+  // result.errorCodes     — C2PA failure codes (e.g. 'livevideo.segment.invalid')
+  // result.sequenceNumber — segment sequence number
+  // result.sequenceResult — { reason: 'valid' | 'duplicate' | 'gap_detected' | ... }
+  // result.bmffHashHex    — BMFF content hash
+  // result.kidHex         — session key ID used
 }
-
-const { result, nextSequenceState } = validated
-// result.isValid        — all crypto checks passed
-// result.errorCodes     — C2PA failure codes (e.g. 'livevideo.segment.invalid')
-// result.sequenceNumber — segment sequence number from VSI
-// result.sequenceResult — { reason: 'valid' | 'duplicate' | 'gap_detected' | ... }
-// result.bmffHashHex    — computed BMFF hash
-// result.kidHex         — session key ID used
-
-// Pass nextSequenceState to the next call for sequence tracking:
-const next = await validateC2paSegment(nextBytes, sessionKeys, nextSequenceState)
 ```
 
-### Validate a manifest-box segment
+### §19.3 — Per-segment C2PA Manifest Box method
+
+Each segment embeds a full C2PA manifest. No init segment or session keys are needed.
 
 ```typescript
 import { validateC2paManifestBoxSegment } from '@svta/cml-c2pa'
 
 let lastManifestId = null
-const { result, nextManifestId, nextState } = validateC2paManifestBoxSegment(
-  segmentBytes, lastManifestId,
-)
-lastManifestId = nextManifestId
-// result.isValid    — manifest parsed + all §19.7.2 checks passed
-// result.errorCodes — C2PA failure codes (e.g. 'livevideo.continuityMethod.invalid')
+let lastState = undefined
+
+for (const segmentBytes of mediaSegments) {
+  const { result, nextManifestId, nextState } = validateC2paManifestBoxSegment(
+    segmentBytes, lastManifestId, lastState,
+  )
+  lastManifestId = nextManifestId
+  lastState = nextState
+
+  // result.isValid    — manifest parsed + all §19.7.2 checks passed
+  // result.errorCodes — C2PA failure codes (e.g. 'livevideo.continuityMethod.invalid')
+  // result.sequenceNumber, result.streamId, result.previousManifestId — parsed assertion data
+}
 ```
 
 ## Public API

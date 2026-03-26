@@ -131,16 +131,40 @@ export type InitSegmentValidation = {
 };
 
 // @public
+export const LiveVideoStatusCode: {
+    readonly INIT_INVALID: "livevideo.init.invalid";
+    readonly MANIFEST_INVALID: "livevideo.manifest.invalid";
+    readonly SEGMENT_INVALID: "livevideo.segment.invalid";
+    readonly ASSERTION_INVALID: "livevideo.assertion.invalid";
+    readonly CONTINUITY_METHOD_INVALID: "livevideo.continuityMethod.invalid";
+    readonly SESSIONKEY_INVALID: "livevideo.sessionkey.invalid";
+};
+
+// @public
+export type LiveVideoStatusCode = typeof LiveVideoStatusCode.INIT_INVALID | typeof LiveVideoStatusCode.MANIFEST_INVALID | typeof LiveVideoStatusCode.SEGMENT_INVALID | typeof LiveVideoStatusCode.ASSERTION_INVALID | typeof LiveVideoStatusCode.CONTINUITY_METHOD_INVALID | typeof LiveVideoStatusCode.SESSIONKEY_INVALID;
+
+// @public
 export type ManifestBoxValidationResult = {
     readonly manifest: C2paManifestStore | null;
     readonly issuer: string | null;
     readonly sequenceNumber: number | null;
     readonly previousManifestId: string | null;
+    readonly streamId: string | null;
+    readonly continuityMethod: string | null;
     readonly bmffHashHex: string | null;
     readonly claimSignatureValid: boolean;
     readonly hasLiveVideoAssertion: boolean;
     readonly chainValid: boolean;
+    readonly streamIdValid: boolean;
+    readonly continuityMethodPresent: boolean;
+    readonly sequenceNumberValid: boolean;
     readonly isValid: boolean;
+};
+
+// @public
+export type ManifestBoxValidationState = {
+    readonly lastStreamId?: string | null;
+    readonly lastSequenceNumber?: number | null;
 };
 
 // @public
@@ -181,15 +205,25 @@ export type SequenceValidationResult = {
 };
 
 // @public
+export function toInitStatusCodes(result: InitSegmentValidation): readonly LiveVideoStatusCode[];
+
+// @public
+export function toManifestBoxStatusCodes(result: ManifestBoxValidationResult): readonly LiveVideoStatusCode[];
+
+// @public
+export function toSegmentStatusCodes(result: SegmentValidationResult): readonly LiveVideoStatusCode[];
+
+// @public
 export function validateBmffHash(segmentBytes: Uint8Array, expectedHash: Uint8Array, options?: BmffHashValidationOptions): Promise<boolean>;
 
 // @public
 export function validateC2paInitSegment(bytes: Uint8Array): Promise<InitSegmentValidation>;
 
 // @public
-export function validateC2paManifestBoxSegment(bytes: Uint8Array, lastManifestId: string | null): {
+export function validateC2paManifestBoxSegment(bytes: Uint8Array, lastManifestId: string | null, state?: ManifestBoxValidationState): {
     readonly result: ManifestBoxValidationResult;
     readonly nextManifestId: string | null;
+    readonly nextState: ManifestBoxValidationState;
 };
 
 // @public

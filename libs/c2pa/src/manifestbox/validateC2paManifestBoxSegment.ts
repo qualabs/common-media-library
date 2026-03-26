@@ -1,6 +1,6 @@
 import { readC2paManifest } from '../readC2paManifest.ts'
 import { bytesToHex } from '../utils.ts'
-import type { ManifestBoxValidationResult } from './ManifestBoxValidation.ts'
+import type { ManifestBoxValidationResult, ManifestBoxValidationState } from './ManifestBoxValidation.ts'
 
 const LIVE_VIDEO_ASSERTION_LABEL = 'c2pa.livevideo.segment'
 const BMFF_HASH_ASSERTION_LABEL = 'c2pa.hash.bmff.v3'
@@ -25,13 +25,18 @@ function extractAssertionData(data: unknown): Record<string, unknown> | null {
  * - Presence of the `c2pa.livevideo.segment` assertion
  * - Continuity of the `previousManifestId` chain
  * - Presence of the `c2pa.hash.bmff.v3` assertion
+ * - `streamId` consistency with the previous segment (§19.7.2)
+ * - `sequenceNumber` strictly increasing (§19.7.2)
+ * - `continuityMethod` field presence (§19.7.2)
  *
  * This function is **pure** — it does not access any external state. The
- * caller is responsible for persisting `nextManifestId` between calls.
+ * caller is responsible for persisting `nextManifestId` and `nextState`
+ * between calls.
  *
  * @param bytes - Raw segment bytes
  * @param lastManifestId - Manifest ID from the previous segment, or null for the first segment
- * @returns Validation result and the manifest ID to persist for the next call
+ * @param state - Optional state from the previous segment for streamId/sequenceNumber checks
+ * @returns Validation result, the manifest ID, and state to persist for the next call
  *
  * @example
  * {@includeCode ../../test/manifestbox/validateC2paManifestBoxSegment.test.ts#example}
@@ -41,11 +46,18 @@ function extractAssertionData(data: unknown): Record<string, unknown> | null {
 export function validateC2paManifestBoxSegment(
 	bytes: Uint8Array,
 	lastManifestId: string | null,
-): { readonly result: ManifestBoxValidationResult; readonly nextManifestId: string | null } {
+	state?: ManifestBoxValidationState,
+): {
+	readonly result: ManifestBoxValidationResult
+	readonly nextManifestId: string | null
+	readonly nextState: ManifestBoxValidationState
+} {
 	let manifest = null
 	let issuer: string | null = null
 	let sequenceNumber: number | null = null
 	let previousManifestId: string | null = null
+	let streamId: string | null = null
+	let continuityMethod: string | null = null
 	let bmffHashHex: string | null = null
 	let claimSignatureValid = false
 	let hasLiveVideoAssertion = false
@@ -68,6 +80,10 @@ export function validateC2paManifestBoxSegment(
 				sequenceNumber = typeof rawSeq === 'number' ? rawSeq : null
 				const rawPrev = liveVideoData?.['previousManifestId']
 				previousManifestId = typeof rawPrev === 'string' ? rawPrev : null
+				const rawStreamId = liveVideoData?.['streamId']
+				streamId = typeof rawStreamId === 'string' ? rawStreamId : null
+				const rawContinuity = liveVideoData?.['continuityMethod']
+				continuityMethod = typeof rawContinuity === 'string' ? rawContinuity : null
 			}
 
 			const hashAssertion = activeManifest.assertions?.find(
@@ -98,7 +114,27 @@ export function validateC2paManifestBoxSegment(
 			normalizeManifestId(previousManifestId) === normalizeManifestId(lastManifestId)
 	}
 
-	const isValid = claimSignatureValid && hasLiveVideoAssertion && chainValid
+	const streamIdValid =
+		state?.lastStreamId == null || streamId === state.lastStreamId
+
+	const continuityMethodPresent = continuityMethod !== null
+
+	const sequenceNumberValid =
+		state?.lastSequenceNumber == null ||
+		(sequenceNumber !== null && sequenceNumber > state.lastSequenceNumber)
+
+	const isValid =
+		claimSignatureValid &&
+		hasLiveVideoAssertion &&
+		chainValid &&
+		streamIdValid &&
+		continuityMethodPresent &&
+		sequenceNumberValid
+
+	const nextState: ManifestBoxValidationState = {
+		lastStreamId: streamId ?? state?.lastStreamId ?? null,
+		lastSequenceNumber: sequenceNumber ?? state?.lastSequenceNumber ?? null,
+	}
 
 	return {
 		result: {
@@ -106,12 +142,18 @@ export function validateC2paManifestBoxSegment(
 			issuer,
 			sequenceNumber,
 			previousManifestId,
+			streamId,
+			continuityMethod,
 			bmffHashHex,
 			claimSignatureValid,
 			hasLiveVideoAssertion,
 			chainValid,
+			streamIdValid,
+			continuityMethodPresent,
+			sequenceNumberValid,
 			isValid,
 		},
 		nextManifestId: currentManifestId ?? lastManifestId,
+		nextState,
 	}
 }

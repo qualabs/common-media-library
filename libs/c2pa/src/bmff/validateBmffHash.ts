@@ -9,9 +9,7 @@ const OFFSET_PREFIX_SIZES_TO_TRY = [8, 0] as const
  * @public
  */
 export type BmffHashValidationOptions = {
-	/** Exclusion list from the C2PA `c2pa.hash.bmff.v3` assertion. */
 	readonly exclusions?: readonly BmffHashExclusion[]
-	/** WebCrypto digest algorithm name. Defaults to `'SHA-256'`. */
 	readonly alg?: string
 }
 

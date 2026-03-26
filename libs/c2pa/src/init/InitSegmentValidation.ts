@@ -25,14 +25,9 @@ export type ValidatedSessionKey = {
  * @public
  */
 export type InitSegmentValidation = {
-  /** The parsed active C2PA manifest */
   readonly activeManifest: C2paManifest
-  /** DER-encoded leaf certificate from the manifest signature, or null if not found */
   readonly certificate: Uint8Array | null
-  /** The manifest label used as the stream's manifest ID */
   readonly manifestId: string | null
-  /** Whether the `c2pa.hash.bmff.v3` hard binding passes. True if no assertion is present. */
   readonly bmffHashValid: boolean
-  /** Session keys that passed signer binding verification and are within their validity period */
   readonly sessionKeys: readonly ValidatedSessionKey[]
 }

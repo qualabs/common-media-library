@@ -11,14 +11,9 @@ const DEFAULT_HASH_ALG = 'SHA-256'
  * @public
  */
 export type BmffHashOptions = {
-	/** Exclusion list from the C2PA `c2pa.hash.bmff.v3` assertion. */
 	readonly exclusions?: readonly BmffHashExclusion[]
-	/** WebCrypto digest algorithm name. Defaults to `'SHA-256'`. */
 	readonly alg?: string
-	/**
-	 * Size in bytes of the per-box file-offset prefix prepended before hashing each box.
-	 * Use `8` for offset-prefix mode (8-byte big-endian file offset), `0` (default) for no prefix.
-	 */
+	/** `8` for offset-prefix mode, `0` (default) for no prefix. */
 	readonly offsetPrefixSize?: number
 }
 

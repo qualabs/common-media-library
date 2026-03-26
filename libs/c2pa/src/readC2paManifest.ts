@@ -21,7 +21,6 @@ function resolveManifestBoxes(jumbfBoxes: JumbfBox[]): JumbfBox[] {
 		return resolveManifestBoxes(parseJumbfBoxes(firstBox.data))
 	}
 
-	// Multiple content boxes — these are the manifest parts (claim, assertions, signature)
 	return jumbfBoxes
 }
 

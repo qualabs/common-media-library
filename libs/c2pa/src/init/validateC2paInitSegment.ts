@@ -18,7 +18,6 @@ const COSE_KEY_ID_LABEL = 2
 function normalizeToUint8Array(value: unknown): Uint8Array {
 	if (value instanceof Uint8Array) return value
 	if (Array.isArray(value)) return new Uint8Array(value as number[])
-	// cbor-x Tag object (e.g. COSE_Sign1 wrapped in CBOR tag 18)
 	const ctor = (value as { constructor?: { name?: string } }).constructor
 	if (ctor?.name === 'Tag') return encode(value) as Uint8Array
 	throw new Error('Cannot convert value to Uint8Array')
@@ -87,7 +86,6 @@ async function validateBmffHashAssertion(
 	const expectedHash =
 		rawHash instanceof Uint8Array ? rawHash : new Uint8Array(rawHash as number[])
 	let alg = (data['alg'] as string | undefined) ?? 'SHA-256'
-	// Normalize algorithm name for WebCrypto (e.g., 'sha256' -> 'SHA-256')
 	if (alg.toLowerCase() === 'sha256') alg = 'SHA-256'
 	const exclusions = (data['exclusions'] as BmffHashExclusion[] | undefined) ?? []
 	return validateBmffHash(bytes, expectedHash, { exclusions, alg })

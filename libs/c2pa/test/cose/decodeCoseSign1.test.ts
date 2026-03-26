@@ -1,4 +1,4 @@
-import { decodeCoseSign1 } from '@svta/cml-c2pa'
+import { decodeCoseSign1 } from '../../src/cose/decodeCoseSign1.ts'
 import { ok, strictEqual, throws } from 'node:assert'
 import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'

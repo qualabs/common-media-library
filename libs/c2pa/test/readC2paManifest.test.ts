@@ -1,4 +1,4 @@
-import { readC2paManifest } from '@svta/cml-c2pa'
+import { readC2paManifest } from '../src/readC2paManifest.ts'
 import type { C2paAssertion } from '@svta/cml-c2pa'
 import { strictEqual, ok, doesNotThrow, throws } from 'node:assert'
 import { readFileSync } from 'node:fs'

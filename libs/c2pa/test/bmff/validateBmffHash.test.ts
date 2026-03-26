@@ -1,4 +1,5 @@
-import { computeBmffHash, validateBmffHash } from '@svta/cml-c2pa'
+import { computeBmffHash } from '../../src/bmff/computeBmffHash.ts'
+import { validateBmffHash } from '../../src/bmff/validateBmffHash.ts'
 import { ok, strictEqual } from 'node:assert'
 import { describe, it } from 'node:test'
 

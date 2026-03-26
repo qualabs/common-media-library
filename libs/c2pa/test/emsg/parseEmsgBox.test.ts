@@ -1,4 +1,4 @@
-import { extractVsiEmsgBox, parseEmsgBox } from '@svta/cml-c2pa'
+import { extractVsiEmsgBox, parseEmsgBox } from '../../src/emsg/parseEmsgBox.ts'
 import { ok, strictEqual, throws } from 'node:assert'
 import { describe, it } from 'node:test'
 

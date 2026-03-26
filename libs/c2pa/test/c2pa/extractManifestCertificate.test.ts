@@ -1,4 +1,4 @@
-import { extractManifestCertificate } from '@svta/cml-c2pa'
+import { extractManifestCertificate } from '../../src/extractManifestCertificate.ts'
 import { ok, strictEqual } from 'node:assert'
 import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'

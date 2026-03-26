@@ -1,4 +1,4 @@
-import { decodeVsiMap } from '@svta/cml-c2pa'
+import { decodeVsiMap } from '../../src/vsi/decodeVsiMap.ts'
 import { throws } from 'node:assert'
 import { describe, it } from 'node:test'
 

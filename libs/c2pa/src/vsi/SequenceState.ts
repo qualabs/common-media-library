@@ -8,9 +8,7 @@
 /**
  * Immutable state snapshot for a single stream's sequence number history.
  *
- * Pass to {@link validateSequenceNumber} and store the returned `nextState`
- * to advance the stream forward. Construct the initial state with
- * {@link createSequenceState}.
+ * Pass to {@link validateC2paSegment} via the `sequenceState` parameter.
  *
  * @public
  */

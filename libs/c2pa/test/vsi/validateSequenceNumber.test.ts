@@ -1,4 +1,5 @@
-import { createSequenceState, validateSequenceNumber } from '@svta/cml-c2pa'
+import { createSequenceState } from '../../src/vsi/createSequenceState.ts'
+import { validateSequenceNumber } from '../../src/vsi/validateSequenceNumber.ts'
 import { strictEqual } from 'node:assert'
 import { describe, it } from 'node:test'
 

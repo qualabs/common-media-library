@@ -5,31 +5,6 @@
 ```ts
 
 // @public
-export type BmffHashConstraint = {
-    readonly offset: number;
-    readonly value: Uint8Array | readonly number[];
-};
-
-// @public
-export type BmffHashExclusion = {
-    readonly xpath: string;
-    readonly data?: readonly BmffHashConstraint[];
-};
-
-// @public
-export type BmffHashOptions = {
-    readonly exclusions?: readonly BmffHashExclusion[];
-    readonly alg?: string;
-    readonly offsetPrefixSize?: number;
-};
-
-// @public
-export type BmffHashValidationOptions = {
-    readonly exclusions?: readonly BmffHashExclusion[];
-    readonly alg?: string;
-};
-
-// @public
 export type C2paAssertion = {
     readonly label: string;
     readonly data: unknown;
@@ -48,78 +23,6 @@ export type C2paManifest = {
 export type C2paManifestStore = {
     readonly activeManifest: C2paManifest;
 };
-
-// @public
-export type C2paSignatureInfo = {
-    readonly issuer: string | null;
-    readonly time: string | null;
-};
-
-// @public
-export function computeBmffHash(segmentBytes: Uint8Array, options?: BmffHashOptions): Promise<Uint8Array>;
-
-// @public
-export type CoseKeyJwk = {
-    readonly kty: string;
-    readonly crv: string;
-    readonly x: string;
-    readonly y?: string;
-};
-
-// @public
-export type CoseSign1 = {
-    readonly protectedBytes: Uint8Array;
-    readonly protectedHeader: Readonly<Record<number, unknown>>;
-    readonly unprotectedHeader: Readonly<Record<number, unknown>>;
-    readonly payload: Uint8Array;
-    readonly signature: Uint8Array;
-    readonly kid: Uint8Array | null;
-    readonly alg: number | null;
-};
-
-// @public
-export function createSequenceState(): SequenceState;
-
-// @public
-export function decodeCoseSign1(coseBytes: Uint8Array): CoseSign1;
-
-// @public
-export function decodeVsiMap(vsiCborBytes: Uint8Array): VsiMap;
-
-// @public
-export type EmsgBox = EmsgBoxV0 | EmsgBoxV1;
-
-// @public
-export type EmsgBoxV0 = {
-    readonly version: 0;
-    readonly flags: number;
-    readonly schemeIdUri: string;
-    readonly value: string;
-    readonly timescale: number;
-    readonly presentationTimeDelta: number;
-    readonly eventDuration: number;
-    readonly id: number;
-    readonly messageData: Uint8Array;
-};
-
-// @public
-export type EmsgBoxV1 = {
-    readonly version: 1;
-    readonly flags: number;
-    readonly schemeIdUri: string;
-    readonly value: string;
-    readonly timescale: number;
-    readonly presentationTime: number;
-    readonly eventDuration: number;
-    readonly id: number;
-    readonly messageData: Uint8Array;
-};
-
-// @public
-export function extractManifestCertificate(mp4Bytes: Uint8Array): Uint8Array | null;
-
-// @public
-export function extractVsiEmsgBox(segmentBytes: Uint8Array): EmsgBox | null;
 
 // @public
 export type InitSegmentValidation = {
@@ -164,13 +67,11 @@ export type ManifestBoxValidationState = {
 };
 
 // @public
-export function parseEmsgBox(payload: Uint8Array): EmsgBox;
-
-// @public
-export function readC2paManifest(bytes: Uint8Array): C2paManifestStore;
-
-// @public
 export type SegmentValidationResult = {
+    readonly sequenceNumber: number;
+    readonly manifestId: Uint8Array;
+    readonly bmffHashHex: string | null;
+    readonly kidHex: string | null;
     readonly sequenceResult: SequenceValidationResult;
     readonly isValid: boolean;
     readonly errorCodes: readonly LiveVideoStatusCode[];
@@ -197,9 +98,6 @@ export type SequenceValidationResult = {
 };
 
 // @public
-export function validateBmffHash(segmentBytes: Uint8Array, expectedHash: Uint8Array, options?: BmffHashValidationOptions): Promise<boolean>;
-
-// @public
 export function validateC2paInitSegment(bytes: Uint8Array): Promise<InitSegmentValidation>;
 
 // @public
@@ -210,10 +108,10 @@ export function validateC2paManifestBoxSegment(bytes: Uint8Array, lastManifestId
 };
 
 // @public
-export function validateC2paSegment(segmentBytes: Uint8Array, coseSign1: CoseSign1, vsi: VsiMap, sessionKey: ValidatedSessionKey | null, sequenceState: SequenceState): Promise<{
+export function validateC2paSegment(segmentBytes: Uint8Array, sessionKeys: readonly ValidatedSessionKey[], sequenceState?: SequenceState): Promise<{
     readonly result: SegmentValidationResult;
     readonly nextSequenceState: SequenceState;
-}>;
+} | null>;
 
 // @public
 export type ValidatedSessionKey = {
@@ -224,22 +122,10 @@ export type ValidatedSessionKey = {
     readonly createdAt: string;
 };
 
-// @public
-export function validateSequenceNumber(state: SequenceState, sequenceNumber: number, minSequenceNumber: number): {
-    readonly result: SequenceValidationResult;
-    readonly nextState: SequenceState;
-};
-
-// @public
-export type VsiMap = {
-    readonly sequenceNumber: number;
-    readonly bmffHash: {
-        readonly hash: Uint8Array;
-        readonly alg: string;
-        readonly exclusions: readonly BmffHashExclusion[];
-    };
-    readonly manifestId: Uint8Array;
-};
+// Warnings were encountered during analysis:
+//
+// src/C2paManifest.ts:23:27 - (ae-forgotten-export) The symbol "C2paSignatureInfo" needs to be exported by the entry point index.d.ts
+// src/init/InitSegmentValidation.ts:13:13 - (ae-forgotten-export) The symbol "CoseKeyJwk" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

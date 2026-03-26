@@ -1,12 +1,14 @@
-import type { CoseSign1 } from '../cose/CoseSign1.ts'
 import { verifyCoseSign1 } from '../cose/verifyCoseSign1.ts'
+import { decodeCoseSign1 } from '../cose/decodeCoseSign1.ts'
+import { extractVsiEmsgBox } from '../emsg/parseEmsgBox.ts'
 import { LiveVideoStatusCode } from '../LiveVideoStatusCode.ts'
-import type { VsiMap } from '../vsi/VsiMap.ts'
+import { decodeVsiMap } from '../vsi/decodeVsiMap.ts'
 import type { SequenceState } from '../vsi/SequenceState.ts'
+import { createSequenceState } from '../vsi/createSequenceState.ts'
 import { validateSequenceNumber } from '../vsi/validateSequenceNumber.ts'
 import { validateBmffHash } from '../bmff/validateBmffHash.ts'
 import type { ValidatedSessionKey } from '../init/InitSegmentValidation.ts'
-import { isKeyExpired } from '../utils.ts'
+import { bytesToHex, isKeyExpired } from '../utils.ts'
 import type { SegmentValidationResult } from './SegmentValidation.ts'
 
 const KEY_TYPE_OKP = 'OKP'
@@ -15,23 +17,24 @@ function resolveImportAlgorithm(jwk: { kty: string; crv: string }): AlgorithmIde
 	return jwk.kty === KEY_TYPE_OKP ? { name: jwk.crv } : { name: 'ECDSA', namedCurve: jwk.crv }
 }
 
+function findSessionKey(sessionKeys: readonly ValidatedSessionKey[], kidHex: string | null): ValidatedSessionKey | null {
+	if (!kidHex || sessionKeys.length === 0) return null
+	return sessionKeys.find(k => k.kid === kidHex) ?? null
+}
+
 /**
- * Validates a C2PA live stream segment against a known session key.
+ * Validates a C2PA live stream segment using the VSI/EMSG method (§19.7.3).
  *
- * Performs all cryptographic checks defined in the C2PA spec §19.7.3:
- * signature verification, BMFF content hash, sequence number floor, and
- * key validity period.
+ * Extracts the EMSG box, decodes the COSE_Sign1 and VSI map, matches the
+ * session key by kid, then performs all cryptographic checks: signature
+ * verification, BMFF content hash, sequence number floor, and key validity.
  *
- * This function is **pure** — it does not access any external state. The
- * caller is responsible for looking up the session key and persisting
- * `nextSequenceState` between calls.
+ * Returns `null` if the segment does not contain a C2PA EMSG box.
  *
- * @param segmentBytes - Raw segment bytes (used for BMFF hash computation)
- * @param coseSign1 - Decoded COSE_Sign1 from the segment's EMSG box
- * @param vsi - Decoded VSI map from the COSE_Sign1 payload
- * @param sessionKey - Session key for the kid in `coseSign1`, or null if not found
+ * @param segmentBytes - Raw segment bytes
+ * @param sessionKeys - Available session keys from the init segment
  * @param sequenceState - Current sequence state for this stream
- * @returns Validation result and the updated sequence state to persist
+ * @returns Validation result and updated sequence state, or `null` if no C2PA EMSG box
  *
  * @example
  * {@includeCode ../../test/segment/validateC2paSegment.test.ts#example}
@@ -40,11 +43,18 @@ function resolveImportAlgorithm(jwk: { kty: string; crv: string }): AlgorithmIde
  */
 export async function validateC2paSegment(
 	segmentBytes: Uint8Array,
-	coseSign1: CoseSign1,
-	vsi: VsiMap,
-	sessionKey: ValidatedSessionKey | null,
-	sequenceState: SequenceState,
-): Promise<{ readonly result: SegmentValidationResult; readonly nextSequenceState: SequenceState }> {
+	sessionKeys: readonly ValidatedSessionKey[],
+	sequenceState: SequenceState = createSequenceState(),
+): Promise<{ readonly result: SegmentValidationResult; readonly nextSequenceState: SequenceState } | null> {
+	const emsgBox = extractVsiEmsgBox(segmentBytes)
+	if (!emsgBox) return null
+
+	const coseSign1 = decodeCoseSign1(emsgBox.messageData)
+	const vsi = decodeVsiMap(coseSign1.payload)
+
+	const kidHex = coseSign1.kid ? bytesToHex(coseSign1.kid) : null
+	const sessionKey = findSessionKey(sessionKeys, kidHex)
+	const bmffHashHex = bytesToHex(vsi.bmffHash.hash)
 	const minSequenceNumber = sessionKey?.minSequenceNumber ?? 0
 
 	const { result: sequenceResult, nextState: nextSequenceState } = validateSequenceNumber(
@@ -53,10 +63,18 @@ export async function validateC2paSegment(
 		minSequenceNumber,
 	)
 
+	const baseFields = {
+		sequenceNumber: vsi.sequenceNumber,
+		manifestId: vsi.manifestId,
+		bmffHashHex,
+		kidHex,
+		sequenceResult,
+	}
+
 	if (!sessionKey) {
 		return {
 			result: {
-				sequenceResult,
+				...baseFields,
 				isValid: false,
 				errorCodes: [LiveVideoStatusCode.SEGMENT_INVALID],
 			},
@@ -90,7 +108,7 @@ export async function validateC2paSegment(
 	const errorCodes = [...codes]
 
 	return {
-		result: { sequenceResult, isValid: errorCodes.length === 0, errorCodes },
+		result: { ...baseFields, isValid: errorCodes.length === 0, errorCodes },
 		nextSequenceState,
 	}
 }

@@ -66,6 +66,15 @@ function parseTime(element: Asn1Element): string | null {
 	return null
 }
 
+function findOidValueInSequence(seqValue: Uint8Array, targetOID: Uint8Array): string | null {
+	const oidEl = readElement(seqValue, 0)
+	if (!oidEl || oidEl.tag !== ASN1_TAG_OBJECT_IDENTIFIER) return null
+	if (!matchesOID(oidEl.value, targetOID)) return null
+
+	const valEl = readElement(seqValue, oidEl.totalSize)
+	return valEl ? new TextDecoder().decode(valEl.value) : null
+}
+
 function findRDNValue(issuerValue: Uint8Array, targetOID: Uint8Array): string | null {
 	let offset = 0
 	while (offset < issuerValue.length) {
@@ -77,11 +86,9 @@ function findRDNValue(issuerValue: Uint8Array, targetOID: Uint8Array): string | 
 			const seqEl = readElement(setEl.value, setOffset)
 			if (!seqEl || seqEl.tag !== ASN1_TAG_SEQUENCE) break
 
-			const oidEl = readElement(seqEl.value, 0)
-			if (oidEl && oidEl.tag === ASN1_TAG_OBJECT_IDENTIFIER && matchesOID(oidEl.value, targetOID)) {
-				const valEl = readElement(seqEl.value, oidEl.totalSize)
-				if (valEl) return new TextDecoder().decode(valEl.value)
-			}
+			const found = findOidValueInSequence(seqEl.value, targetOID)
+			if (found) return found
+
 			setOffset += seqEl.totalSize
 		}
 		offset += setEl.totalSize

@@ -8,14 +8,9 @@ import { createSequenceState } from '../vsi/createSequenceState.ts'
 import { validateSequenceNumber } from '../vsi/validateSequenceNumber.ts'
 import { validateBmffHash } from '../bmff/validateBmffHash.ts'
 import type { ValidatedSessionKey } from '../init/InitSegmentValidation.ts'
+import { resolveImportAlgorithm } from '../cose/resolveImportAlgorithm.ts'
 import { bytesToHex, isKeyExpired } from '../utils.ts'
 import type { SegmentValidationResult } from './SegmentValidation.ts'
-
-const KEY_TYPE_OKP = 'OKP'
-
-function resolveImportAlgorithm(jwk: { kty: string; crv: string }): AlgorithmIdentifier | EcKeyImportParams {
-	return jwk.kty === KEY_TYPE_OKP ? { name: jwk.crv } : { name: 'ECDSA', namedCurve: jwk.crv }
-}
 
 function findSessionKey(sessionKeys: readonly ValidatedSessionKey[], kidHex: string | null): ValidatedSessionKey | null {
 	if (!kidHex || sessionKeys.length === 0) return null

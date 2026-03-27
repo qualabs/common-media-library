@@ -1,3 +1,5 @@
+import type { C2paAssertion } from '../C2paAssertion.ts'
+import type { C2paManifestStore } from '../C2paManifest.ts'
 import { LiveVideoStatusCode } from '../LiveVideoStatusCode.ts'
 import { readC2paManifest } from '../readC2paManifest.ts'
 import { bytesToHex } from '../utils.ts'
@@ -17,6 +19,64 @@ function extractAssertionData(data: unknown): Record<string, unknown> | null {
 		return data as Record<string, unknown>
 	}
 	return null
+}
+
+type LiveVideoFields = {
+	sequenceNumber: number | null
+	previousManifestId: string | null
+	streamId: string | null
+	continuityMethod: string | null
+}
+
+function parseLiveVideoAssertion(assertions: readonly C2paAssertion[]): LiveVideoFields | null {
+	const assertion = assertions.find(a => a.label === LIVE_VIDEO_ASSERTION_LABEL)
+	if (!assertion) return null
+
+	const data = extractAssertionData(assertion.data)
+	const rawSeq = data?.['sequenceNumber']
+	const rawPrev = data?.['previousManifestId']
+	const rawStreamId = data?.['streamId']
+	const rawContinuity = data?.['continuityMethod']
+
+	return {
+		sequenceNumber: typeof rawSeq === 'number' ? rawSeq : null,
+		previousManifestId: typeof rawPrev === 'string' ? rawPrev : null,
+		streamId: typeof rawStreamId === 'string' ? rawStreamId : null,
+		continuityMethod: typeof rawContinuity === 'string' ? rawContinuity : null,
+	}
+}
+
+function parseBmffHashHex(assertions: readonly C2paAssertion[]): string | null {
+	const assertion = assertions.find(a => a.label === BMFF_HASH_ASSERTION_LABEL)
+	if (!assertion) return null
+
+	const data = extractAssertionData(assertion.data)
+	const rawHash = data?.['hash'] ?? data?.['value']
+	if (rawHash instanceof Uint8Array) return bytesToHex(rawHash)
+	if (Array.isArray(rawHash)) return bytesToHex(new Uint8Array(rawHash as number[]))
+	return null
+}
+
+function parseManifest(bytes: Uint8Array): {
+	manifest: C2paManifestStore | null
+	issuer: string | null
+	liveVideo: LiveVideoFields | null
+	bmffHashHex: string | null
+} {
+	try {
+		const manifest = readC2paManifest(bytes)
+		const activeManifest = manifest?.activeManifest
+		if (!activeManifest) return { manifest, issuer: null, liveVideo: null, bmffHashHex: null }
+
+		return {
+			manifest,
+			issuer: activeManifest.signatureInfo?.issuer ?? null,
+			liveVideo: parseLiveVideoAssertion(activeManifest.assertions),
+			bmffHashHex: parseBmffHashHex(activeManifest.assertions),
+		}
+	} catch {
+		return { manifest: null, issuer: null, liveVideo: null, bmffHashHex: null }
+	}
 }
 
 /**
@@ -47,88 +107,40 @@ export function validateC2paManifestBoxSegment(
 	readonly nextManifestId: string | null
 	readonly nextState: ManifestBoxValidationState
 } {
-	let manifest = null
-	let issuer: string | null = null
-	let sequenceNumber: number | null = null
-	let previousManifestId: string | null = null
-	let streamId: string | null = null
-	let continuityMethod: string | null = null
-	let bmffHashHex: string | null = null
-	let claimSignatureValid = false
-	let hasLiveVideoAssertion = false
+	const { manifest, issuer, liveVideo, bmffHashHex } = parseManifest(bytes)
+	const hasManifest = manifest !== null
+	const hasLiveVideo = liveVideo !== null
 
-	try {
-		manifest = readC2paManifest(bytes)
-		const activeManifest = manifest?.activeManifest
-
-		if (activeManifest) {
-			claimSignatureValid = true
-			issuer = activeManifest.signatureInfo?.issuer ?? null
-
-			const liveVideoAssertion = activeManifest.assertions?.find(
-				a => a.label === LIVE_VIDEO_ASSERTION_LABEL,
-			)
-			if (liveVideoAssertion) {
-				hasLiveVideoAssertion = true
-				const liveVideoData = extractAssertionData(liveVideoAssertion.data)
-				const rawSeq = liveVideoData?.['sequenceNumber']
-				sequenceNumber = typeof rawSeq === 'number' ? rawSeq : null
-				const rawPrev = liveVideoData?.['previousManifestId']
-				previousManifestId = typeof rawPrev === 'string' ? rawPrev : null
-				const rawStreamId = liveVideoData?.['streamId']
-				streamId = typeof rawStreamId === 'string' ? rawStreamId : null
-				const rawContinuity = liveVideoData?.['continuityMethod']
-				continuityMethod = typeof rawContinuity === 'string' ? rawContinuity : null
-			}
-
-			const hashAssertion = activeManifest.assertions?.find(
-				a => a.label === BMFF_HASH_ASSERTION_LABEL,
-			)
-			if (hashAssertion) {
-				const hashData = extractAssertionData(hashAssertion.data)
-				const rawHash = hashData?.['hash'] ?? hashData?.['value']
-				if (rawHash instanceof Uint8Array) {
-					bmffHashHex = bytesToHex(rawHash)
-				} else if (Array.isArray(rawHash)) {
-					bmffHashHex = bytesToHex(new Uint8Array(rawHash as number[]))
-				}
-			}
-		}
-	} catch {
-		claimSignatureValid = false
-	}
-
-	const currentManifestId = manifest?.activeManifest?.instanceId ?? null
+	const sequenceNumber = liveVideo?.sequenceNumber ?? null
+	const previousManifestId = liveVideo?.previousManifestId ?? null
+	const streamId = liveVideo?.streamId ?? null
+	const continuityMethod = liveVideo?.continuityMethod ?? null
 
 	let chainValid: boolean
 	if (!lastManifestId) {
-		chainValid = hasLiveVideoAssertion
+		chainValid = hasLiveVideo
 	} else {
 		chainValid =
 			!!previousManifestId &&
 			normalizeManifestId(previousManifestId) === normalizeManifestId(lastManifestId)
 	}
 
-	const streamIdValid =
-		state?.lastStreamId == null || streamId === state.lastStreamId
+	const streamIdValid = state?.lastStreamId == null || streamId === state.lastStreamId
 	const continuityMethodPresent = continuityMethod !== null
 	const sequenceNumberValid =
 		state?.lastSequenceNumber == null ||
 		(sequenceNumber !== null && sequenceNumber > state.lastSequenceNumber)
 
 	const codes = new Set<LiveVideoStatusCode>()
-	if (!claimSignatureValid) codes.add(LiveVideoStatusCode.MANIFEST_INVALID)
-	if (!hasLiveVideoAssertion) codes.add(LiveVideoStatusCode.ASSERTION_INVALID)
+	if (!hasManifest) codes.add(LiveVideoStatusCode.MANIFEST_INVALID)
+	if (!hasLiveVideo) codes.add(LiveVideoStatusCode.ASSERTION_INVALID)
 	if (!streamIdValid) codes.add(LiveVideoStatusCode.ASSERTION_INVALID)
 	if (!sequenceNumberValid) codes.add(LiveVideoStatusCode.ASSERTION_INVALID)
 	if (!continuityMethodPresent) codes.add(LiveVideoStatusCode.CONTINUITY_METHOD_INVALID)
 	if (!chainValid) codes.add(LiveVideoStatusCode.CONTINUITY_METHOD_INVALID)
 	const errorCodes = [...codes]
 
-	const nextState: ManifestBoxValidationState = {
-		lastStreamId: streamId ?? state?.lastStreamId ?? null,
-		lastSequenceNumber: sequenceNumber ?? state?.lastSequenceNumber ?? null,
-	}
+	const currentManifestId = manifest?.activeManifest?.instanceId ?? null
 
 	return {
 		result: {
@@ -143,6 +155,9 @@ export function validateC2paManifestBoxSegment(
 			errorCodes,
 		},
 		nextManifestId: currentManifestId ?? lastManifestId,
-		nextState,
+		nextState: {
+			lastStreamId: streamId ?? state?.lastStreamId,
+			lastSequenceNumber: sequenceNumber ?? state?.lastSequenceNumber,
+		},
 	}
 }

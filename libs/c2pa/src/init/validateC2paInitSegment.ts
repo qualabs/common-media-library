@@ -8,7 +8,6 @@ import { validateBmffHash } from '../bmff/validateBmffHash.ts'
 import type { BmffHashExclusion } from '../bmff/BmffHashExclusion.ts'
 import { convertCoseKeyToJwk } from '../cose/convertCoseKeyToJwk.ts'
 import { verifySignerBinding } from '../cose/verifySignerBinding.ts'
-import type { CoseKeyJwk } from '../cose/CoseKeyJwk.ts'
 import type { InitSegmentValidation, ValidatedSessionKey } from './InitSegmentValidation.ts'
 import { bytesToHex, isKeyExpired } from '../utils.ts'
 
@@ -32,12 +31,15 @@ function ensureDecodedCbor(value: unknown): unknown {
 	return value
 }
 
+// cbor-x uses this key for CBOR tagged values (e.g., tag 0 for date-time)
+const CBOR_TAGGED_KEY = '@@TAGGED@@'
+
 function parseCreatedAt(value: unknown): string | null {
 	if (typeof value === 'string') return value
 	if (value instanceof Date) return value.toISOString()
 	if (typeof value === 'object' && value !== null) {
 		const obj = value as Record<string, unknown>
-		const tagged = obj['@@TAGGED@@']
+		const tagged = obj[CBOR_TAGGED_KEY]
 		if (Array.isArray(tagged) && tagged.length === 2) return String(tagged[1])
 		const direct = obj['value'] ?? (obj as unknown as Record<number, unknown>)[1]
 		if (typeof direct === 'string') return direct
@@ -92,20 +94,26 @@ async function validateBmffHashAssertion(
 	return validateBmffHash(bytes, expectedHash, { exclusions, alg })
 }
 
-async function validateSingleSessionKey(
-	entry: unknown,
-	certificate: Uint8Array,
-): Promise<ValidatedSessionKey | null> {
+type SessionKeyFields = {
+	minSequenceNumber: number
+	validityPeriod: number
+	createdAt: string
+	kid: string
+	coseKey: unknown
+	signerBindingBytes: Uint8Array
+}
+
+function extractSessionKeyFields(entry: unknown): SessionKeyFields | null {
 	const keyData = entry as Record<string, unknown>
 
 	const minSequenceNumber = keyData['minSequenceNumber']
 	const validityPeriod = keyData['validityPeriod']
 	const createdAt = parseCreatedAt(keyData['createdAt'])
 
-	if (minSequenceNumber == null || !validityPeriod || !createdAt) return null
+	if (minSequenceNumber == null || validityPeriod == null || !createdAt) return null
 
-	const notYetActive = new Date() < new Date(createdAt)
-	if (notYetActive || isKeyExpired(createdAt, Number(validityPeriod))) return null
+	const isNotYetActive = new Date() < new Date(createdAt)
+	if (isNotYetActive || isKeyExpired(createdAt, Number(validityPeriod))) return null
 
 	const coseKey = ensureDecodedCbor(keyData['key'])
 	const kid = extractKidHex(keyData, coseKey)
@@ -114,30 +122,48 @@ async function validateSingleSessionKey(
 	const signerBindingRaw = keyData['signerBinding']
 	if (!signerBindingRaw) return null
 
-	let signerBindingBytes: Uint8Array
 	try {
-		signerBindingBytes = normalizeToUint8Array(signerBindingRaw)
+		return {
+			minSequenceNumber: Number(minSequenceNumber),
+			validityPeriod: Number(validityPeriod),
+			createdAt,
+			kid,
+			coseKey,
+			signerBindingBytes: normalizeToUint8Array(signerBindingRaw),
+		}
 	} catch {
 		return null
 	}
+}
 
-	const bindingValid = await verifySignerBinding(signerBindingBytes, coseKey, certificate)
-	if (!bindingValid) return null
+async function verifyAndConvertKey(
+	fields: SessionKeyFields,
+	certificate: Uint8Array,
+): Promise<ValidatedSessionKey | null> {
+	const isBindingValid = await verifySignerBinding(fields.signerBindingBytes, fields.coseKey, certificate)
+	if (!isBindingValid) return null
 
-	let jwk: CoseKeyJwk
 	try {
-		jwk = convertCoseKeyToJwk(coseKey)
+		const jwk = convertCoseKeyToJwk(fields.coseKey)
+		return {
+			kid: fields.kid,
+			jwk,
+			minSequenceNumber: fields.minSequenceNumber,
+			validityPeriod: fields.validityPeriod,
+			createdAt: fields.createdAt,
+		}
 	} catch {
 		return null
 	}
+}
 
-	return {
-		kid,
-		jwk,
-		minSequenceNumber: Number(minSequenceNumber),
-		validityPeriod: Number(validityPeriod),
-		createdAt,
-	}
+async function validateSingleSessionKey(
+	entry: unknown,
+	certificate: Uint8Array,
+): Promise<ValidatedSessionKey | null> {
+	const fields = extractSessionKeyFields(entry)
+	if (!fields) return null
+	return verifyAndConvertKey(fields, certificate)
 }
 
 async function validateSessionKeys(

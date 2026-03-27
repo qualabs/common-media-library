@@ -10,7 +10,12 @@ import { findC2paUuidBox, stripJumbfUuidPrefix } from './utils.ts'
 import { extractCertificateInfo } from './x509/extractCertificateInfo.ts'
 
 
-function resolveManifestBoxes(jumbfBoxes: JumbfBox[]): JumbfBox[] {
+const MAX_JUMBF_NESTING_DEPTH = 20
+const X5CHAIN_HEADER_LABEL = 33
+
+function resolveManifestBoxes(jumbfBoxes: JumbfBox[], depth = 0): JumbfBox[] {
+	if (depth >= MAX_JUMBF_NESTING_DEPTH) return jumbfBoxes
+
 	// Skip jumd description boxes — they contain labels, not manifest content
 	const contentBoxes = jumbfBoxes.filter(b => b.type !== 'jumd')
 
@@ -18,7 +23,7 @@ function resolveManifestBoxes(jumbfBoxes: JumbfBox[]): JumbfBox[] {
 	// This handles: store jumb → manifest jumb → claim/assertions/signature
 	const firstBox = contentBoxes[0]
 	if (contentBoxes.length === 1 && firstBox?.type === 'jumb') {
-		return resolveManifestBoxes(parseJumbfBoxes(firstBox.data))
+		return resolveManifestBoxes(parseJumbfBoxes(firstBox.data), depth + 1)
 	}
 
 	return jumbfBoxes
@@ -76,6 +81,24 @@ function parseAssertions(assertionStoreBoxes: JumbfBox[]): C2paAssertion[] {
 	}
 
 	return assertions
+}
+
+function parseSignatureInfo(signatureBytes: Uint8Array | null): { issuer: string | null; signingTime: string | null } {
+	if (!signatureBytes) return { issuer: null, signingTime: null }
+	try {
+		const cose = decodeCoseSign1(signatureBytes)
+		const x5chain = (cose.protectedHeader[X5CHAIN_HEADER_LABEL] ?? cose.unprotectedHeader[X5CHAIN_HEADER_LABEL]) as Uint8Array | Uint8Array[] | null | undefined
+		if (!x5chain) return { issuer: null, signingTime: null }
+
+		const certDER = Array.isArray(x5chain) ? x5chain[0] : x5chain
+		if (!(certDER instanceof Uint8Array)) return { issuer: null, signingTime: null }
+
+		const certInfo = extractCertificateInfo(certDER)
+		return { issuer: certInfo?.issuer ?? null, signingTime: certInfo?.notBefore ?? null }
+	} catch {
+		// signature parsing failed — continue without signature info
+		return { issuer: null, signingTime: null }
+	}
 }
 
 /**
@@ -145,26 +168,7 @@ export function readC2paManifest(bytes: Uint8Array): C2paManifestStore {
 		}
 	}
 
-	let issuer: string | null = null
-	let signingTime: string | null = null
-
-	if (signatureBytes) {
-		try {
-			const cose = decodeCoseSign1(signatureBytes)
-			const x5chain = (cose.protectedHeader[33] ?? cose.unprotectedHeader[33]) as Uint8Array | Uint8Array[] | null | undefined
-			if (x5chain) {
-				const certDER = Array.isArray(x5chain) ? x5chain[0] : x5chain
-				if (certDER instanceof Uint8Array) {
-					const certInfo = extractCertificateInfo(certDER)
-					if (certInfo) {
-						issuer = certInfo.issuer
-						signingTime = certInfo.notBefore
-					}
-				}
-			}
-		}
-		catch { /* signature parsing failed — continue without signature info */ }
-	}
+	const { issuer, signingTime } = parseSignatureInfo(signatureBytes)
 
 	const instanceId = (claimData?.['instanceID'] ?? claimData?.['instance_id'] ?? null) as string | null
 	const claimGenerator = (claimData?.['claim_generator'] ?? claimData?.['claimGenerator'] ?? null) as string | null

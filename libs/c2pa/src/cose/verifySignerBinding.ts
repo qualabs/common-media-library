@@ -1,13 +1,8 @@
 import { encode } from 'cbor-x'
 import { convertCoseKeyToJwk } from './convertCoseKeyToJwk.ts'
 import { decodeCoseSign1 } from './decodeCoseSign1.ts'
-import type { CoseKeyJwk } from './CoseKeyJwk.ts'
+import { resolveImportAlgorithm } from './resolveImportAlgorithm.ts'
 import { verifyCoseSign1 } from './verifyCoseSign1.ts'
-
-function resolveImportAlgorithm(jwk: CoseKeyJwk): AlgorithmIdentifier | EcKeyImportParams {
-	if (jwk.kty === 'OKP') return { name: jwk.crv }
-	return { name: 'ECDSA', namedCurve: jwk.crv }
-}
 
 /**
  * Verifies a C2PA signer binding — a `COSE_Sign1` structure that proves

@@ -8,6 +8,8 @@ import type { ManifestBoxValidationResult, ManifestBoxValidationState } from './
 const LIVE_VIDEO_ASSERTION_LABEL = 'c2pa.livevideo.segment'
 const BMFF_HASH_ASSERTION_LABEL = 'c2pa.hash.bmff.v3'
 const MANIFEST_ID_PREFIX_PATTERN = /^(xmp:iid:|urn:uuid:)/i
+const CONTINUITY_METHOD_MANIFEST_ID = 'c2pa.manifestId'
+const SUPPORTED_CONTINUITY_METHODS = new Set([CONTINUITY_METHOD_MANIFEST_ID])
 
 function normalizeManifestId(id: string | null): string | null {
 	if (!id) return null
@@ -116,17 +118,7 @@ export function validateC2paManifestBoxSegment(
 	const streamId = liveVideo?.streamId ?? null
 	const continuityMethod = liveVideo?.continuityMethod ?? null
 
-	let chainValid: boolean
-	if (!lastManifestId) {
-		chainValid = hasLiveVideo
-	} else {
-		chainValid =
-			!!previousManifestId &&
-			normalizeManifestId(previousManifestId) === normalizeManifestId(lastManifestId)
-	}
-
 	const streamIdValid = state?.lastStreamId == null || streamId === state.lastStreamId
-	const continuityMethodPresent = continuityMethod !== null
 	const sequenceNumberValid =
 		state?.lastSequenceNumber == null ||
 		(sequenceNumber !== null && sequenceNumber > state.lastSequenceNumber)
@@ -136,8 +128,20 @@ export function validateC2paManifestBoxSegment(
 	if (!hasLiveVideo) codes.add(LiveVideoStatusCode.ASSERTION_INVALID)
 	if (!streamIdValid) codes.add(LiveVideoStatusCode.ASSERTION_INVALID)
 	if (!sequenceNumberValid) codes.add(LiveVideoStatusCode.ASSERTION_INVALID)
-	if (!continuityMethodPresent) codes.add(LiveVideoStatusCode.CONTINUITY_METHOD_INVALID)
-	if (!chainValid) codes.add(LiveVideoStatusCode.CONTINUITY_METHOD_INVALID)
+
+	if (!continuityMethod) {
+		codes.add(LiveVideoStatusCode.CONTINUITY_METHOD_INVALID)
+	} else if (!SUPPORTED_CONTINUITY_METHODS.has(continuityMethod)) {
+		codes.add(LiveVideoStatusCode.CONTINUITY_METHOD_INVALID)
+	} else if (continuityMethod === CONTINUITY_METHOD_MANIFEST_ID) {
+		if (!previousManifestId) {
+			codes.add(LiveVideoStatusCode.CONTINUITY_METHOD_INVALID)
+		} else if (lastManifestId && normalizeManifestId(previousManifestId) !== normalizeManifestId(lastManifestId)) {
+			// §19.7.2: previousManifestId value mismatch → SEGMENT_INVALID
+			codes.add(LiveVideoStatusCode.SEGMENT_INVALID)
+		}
+	}
+
 	const errorCodes = [...codes]
 
 	const currentManifestId = manifest?.activeManifest?.instanceId ?? null

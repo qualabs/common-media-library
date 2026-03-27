@@ -185,9 +185,9 @@ async function validateSessionKeys(
  * Only session keys with a valid signer binding and an unexpired validity period
  * are included in the result.
  *
- * @param bytes - Raw init segment bytes (must not contain an `mdat` box)
- * @returns Structured validation result
- * @throws If the bytes contain an `mdat` box, or if no C2PA UUID box is found
+ * @param bytes - Raw init segment bytes
+ * @returns Structured validation result (with `INIT_INVALID` error code if `mdat` box is present)
+ * @throws If no C2PA UUID box is found
  *
  * @example
  * {@includeCode ../../test/init/validateC2paInitSegment.test.ts#example}
@@ -197,7 +197,14 @@ async function validateSessionKeys(
 export async function validateC2paInitSegment(bytes: Uint8Array): Promise<InitSegmentValidation> {
 	const boxes = readIsoBoxes(bytes)
 	if (findIsoBox(boxes, box => box.type === 'mdat')) {
-		throw new Error('Init segment must not contain an mdat box')
+		return {
+			activeManifest: null,
+			certificate: null,
+			manifestId: null,
+			sessionKeys: [],
+			isValid: false,
+			errorCodes: [LiveVideoStatusCode.INIT_INVALID],
+		}
 	}
 
 	const { activeManifest } = readC2paManifest(bytes)

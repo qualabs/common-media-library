@@ -95,6 +95,9 @@ export async function validateC2paSegment(
 	])
 
 	const sequenceAboveMin = vsi.sequenceNumber >= sessionKey.minSequenceNumber
+	// §19.7.3 requires comparing against the segment's presentation time, but the
+	// VSI map does not carry it. We compare against `now` as an approximation,
+	// which is accurate for live streams validated in real time.
 	const keyExpired = isKeyExpired(sessionKey.createdAt, sessionKey.validityPeriod)
 
 	const codes = new Set<LiveVideoStatusCode>()

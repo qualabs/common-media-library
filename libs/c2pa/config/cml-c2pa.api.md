@@ -56,6 +56,7 @@ export type ManifestBoxValidationResult = {
     readonly streamId: string | null;
     readonly continuityMethod: string | null;
     readonly bmffHashHex: string | null;
+    readonly bmffHashValid: boolean | null;
     readonly isValid: boolean;
     readonly errorCodes: readonly LiveVideoStatusCode[];
 };
@@ -101,11 +102,11 @@ export type SequenceValidationResult = {
 export function validateC2paInitSegment(bytes: Uint8Array): Promise<InitSegmentValidation>;
 
 // @public
-export function validateC2paManifestBoxSegment(bytes: Uint8Array, lastManifestId: string | null, state?: ManifestBoxValidationState): {
+export function validateC2paManifestBoxSegment(bytes: Uint8Array, lastManifestId: string | null, state?: ManifestBoxValidationState): Promise<{
     readonly result: ManifestBoxValidationResult;
     readonly nextManifestId: string | null;
     readonly nextState: ManifestBoxValidationState;
-};
+}>;
 
 // @public
 export function validateC2paSegment(segmentBytes: Uint8Array, sessionKeys: readonly ValidatedSessionKey[], sequenceState?: SequenceState): Promise<{

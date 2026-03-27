@@ -16,6 +16,7 @@ export type ManifestBoxValidationResult = {
   readonly streamId: string | null
   readonly continuityMethod: string | null
   readonly bmffHashHex: string | null
+  readonly bmffHashValid: boolean | null
   readonly isValid: boolean
   readonly errorCodes: readonly LiveVideoStatusCode[]
 }

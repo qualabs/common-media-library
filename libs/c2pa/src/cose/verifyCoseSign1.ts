@@ -67,7 +67,12 @@ function extractDerInteger(
 	return { value: der.slice(start, start + remaining), nextOffset: valueStart + length }
 }
 
-function derToRawEcdsaSignature(der: Uint8Array, componentSize: number): Uint8Array {
+/**
+ * Converts a DER-encoded ECDSA signature to the raw `r || s` form WebCrypto expects.
+ *
+ * @internal
+ */
+export function derToRawEcdsaSignature(der: Uint8Array, componentSize: number): Uint8Array {
 	if (der[0] !== DER_SEQUENCE_TAG) throw new Error('DER signature: expected SEQUENCE tag')
 	const { nextOffset: contentStart } = parseDerLength(der, 1)
 	const rResult = extractDerInteger(der, contentStart)

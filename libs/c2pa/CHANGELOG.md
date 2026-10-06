@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- The claim signature check also reads the certificate chain from the legacy `x5chain` string header label. The integer label 33 still wins when both labels are present.
+
 ## [1.3.0] - 2026-09-29
 
 ### Fixed

@@ -41,10 +41,11 @@ describe('validateManifestIntegrity', () => {
 	it('returns no codes for a signed manifest with no claim refs', async () => {
 		const signatureBytes = await signer.sign(EMPTY_CLAIM_CBOR)
 
-		const { codes, certificate } = await validateManifestIntegrity(internalData({ signatureBytes }))
+		const { codes, chain, isSignatureValid } = await validateManifestIntegrity(internalData({ signatureBytes }))
 
 		strictEqual(codes.length, 0)
-		deepStrictEqual(certificate, signer.certificateDER)
+		deepStrictEqual(chain[0], signer.certificateDER)
+		strictEqual(isSignatureValid, true)
 	})
 	// #endregion example
 
@@ -69,11 +70,12 @@ describe('validateManifestIntegrity', () => {
 	})
 
 	it('reports CLAIM_SIGNATURE_MISSING when the manifest has no signature box', async () => {
-		const { codes, certificate } = await validateManifestIntegrity(internalData({ signatureBytes: null }))
+		const { codes, chain, isSignatureValid } = await validateManifestIntegrity(internalData({ signatureBytes: null }))
 
 		ok(codes.includes(C2paStatusCode.CLAIM_SIGNATURE_MISSING))
 		strictEqual(codes.includes(C2paStatusCode.CLAIM_SIGNATURE_MISMATCH), false)
-		strictEqual(certificate, null)
+		strictEqual(chain.length, 0)
+		strictEqual(isSignatureValid, false)
 	})
 
 	it('reports CLAIM_SIGNATURE_MISMATCH when the signature carries no certificate', async () => {

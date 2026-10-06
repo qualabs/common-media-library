@@ -83,12 +83,32 @@ async function validateMerkleSegment(initUrl: string, segmentUrl: string): Promi
 }
 ```
 
+### Signer trust (all methods)
+
+`isValid` does not tell who signed the content. Create a trust policy once, and pass it to `validateC2paInitSegment` and `validateC2paManifestBoxSegment`. Every result then carries `isTrusted`. If the policy does not trust the signer, `isValid` is `false`. VSI and Merkle segments copy `isTrusted` from their init segment.
+
+```typescript
+import { createTrustPolicy, validateC2paInitSegment } from '@svta/cml-c2pa'
+
+async function validateSigner(initUrl: string, trustAnchorsUrl: string): Promise<void> {
+  const trustPolicy = await createTrustPolicy({ trustAnchors: trustAnchorsUrl })
+  if (trustPolicy.loadErrors.length > 0) {
+    console.warn(trustPolicy.loadErrors)
+  }
+
+  const initResponse = await fetch(initUrl)
+  const init = await validateC2paInitSegment(new Uint8Array(await initResponse.arrayBuffer()), { trustPolicy })
+  console.log(init.isValid, init.isTrusted)
+}
+```
+
 ## Docs
 
 - [VSI/EMSG Validation](https://github.com/streaming-video-technology-alliance/common-media-library/blob/main/libs/c2pa/docs/vsi-validation.md) (§19.4)
 - [Manifest Box Validation](https://github.com/streaming-video-technology-alliance/common-media-library/blob/main/libs/c2pa/docs/manifest-box-validation.md) (§19.3)
 - [VOD Merkle Validation](https://github.com/streaming-video-technology-alliance/common-media-library/blob/main/libs/c2pa/docs/merkle-validation.md) (§15.12.2 / §18.6)
 - [Results and Error Codes](https://github.com/streaming-video-technology-alliance/common-media-library/blob/main/libs/c2pa/docs/results-and-error-codes.md)
+- [Signer Trust Validation](https://github.com/streaming-video-technology-alliance/common-media-library/blob/main/libs/c2pa/docs/trust-validation.md)
 
 ## References
 

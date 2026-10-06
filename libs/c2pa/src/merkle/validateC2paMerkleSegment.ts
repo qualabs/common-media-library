@@ -212,6 +212,9 @@ async function computeLeafHash(
  * merkle maps (§15.12.2.2). Pure: the caller persists `nextState` and resets
  * `state` after a seek.
  *
+ * The result carries the `isTrusted` value of the matched merkle maps, which
+ * `validateC2paInitSegment` sets when it receives a trust policy.
+ *
  * `merkleMaps` must be non-empty; the caller is responsible for only calling
  * this in VOD Merkle mode (i.e. after `InitSegmentValidation.merkleMaps` came
  * back non-empty).
@@ -235,6 +238,7 @@ export async function validateC2paMerkleSegment(
 	const leafHashCache: LeafHashCache = []
 	let location: number | null = null
 	let bmffHashHex: string | null = null
+	let isTrusted: boolean | undefined
 
 	const payloads = extractMerkleAuxBoxes(segmentBytes)
 	if (payloads.length === 0) {
@@ -255,6 +259,7 @@ export async function validateC2paMerkleSegment(
 		}
 
 		if (location === null) location = segmentMap.location
+		if (merkleMap.isTrusted !== undefined) isTrusted = (isTrusted ?? true) && merkleMap.isTrusted
 
 		// §15.12.2: each track's location must increment by 1 during sequential playback.
 		const trackKey = `${segmentMap.uniqueId}:${segmentMap.localId}`
@@ -277,12 +282,15 @@ export async function validateC2paMerkleSegment(
 		}
 	}
 
+	if (isTrusted === false) codes.add(C2paStatusCode.SIGNING_CREDENTIAL_UNTRUSTED)
+
 	return {
 		result: {
 			location,
 			bmffHashHex,
 			isValid: codes.size === 0,
 			errorCodes: [...codes],
+			...(isTrusted !== undefined && { isTrusted }),
 		},
 		nextState: { lastLocations: nextLocations },
 	}

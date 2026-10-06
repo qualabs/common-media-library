@@ -122,7 +122,7 @@ export function buildMediaContent(seed: number): Uint8Array {
 
 // --- Init segment fixture (JUMBF manifest with c2pa.hash.bmff.v3 assertion) ---
 
-function buildJumd(label: string): Uint8Array {
+export function buildJumd(label: string): Uint8Array {
 	const labelBytes = TEXT_ENCODER.encode(label)
 	const data = new Uint8Array(16 + 1 + labelBytes.length + 1)
 	data[16] = 0x03 // toggles: requestable + label present
@@ -130,7 +130,7 @@ function buildJumd(label: string): Uint8Array {
 	return buildBox('jumd', data)
 }
 
-function buildJumb(label: string, ...content: readonly Uint8Array[]): Uint8Array {
+export function buildJumb(label: string, ...content: readonly Uint8Array[]): Uint8Array {
 	return buildBox('jumb', concatBytes(buildJumd(label), ...content))
 }
 

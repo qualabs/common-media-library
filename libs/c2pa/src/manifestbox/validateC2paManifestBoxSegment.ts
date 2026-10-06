@@ -9,6 +9,7 @@ import { parseExclusions } from '../bmff/parseExclusions.ts'
 import type { BmffHashExclusion } from '../bmff/BmffHashExclusion.ts'
 import type { InternalManifestData } from '../claim/InternalManifestData.ts'
 import { validateManifestIntegrity } from '../claim/validateManifestIntegrity.ts'
+import { evaluateSignerTrust } from '../trust/evaluateCertificateTrust.ts'
 import type {
 	ManifestBoxValidationOptions,
 	ManifestBoxValidationResult,
@@ -172,6 +173,10 @@ async function validateContinuity(
  * A validator for an implementer-defined continuity method can be registered
  * via {@link ManifestBoxValidationOptions}.
  *
+ * With a `trustPolicy` in the options, the result carries `isTrusted` for the signer of
+ * this segment. If the policy does not trust the signer, the result is not valid and
+ * `errorCodes` contains `signingCredential.untrusted` or `signingCredential.invalid` (§15.7).
+ *
  * This function is **pure** — it does not access any external state. The
  * caller is responsible for persisting `nextManifestId` and `nextState`
  * between calls.
@@ -179,7 +184,7 @@ async function validateContinuity(
  * @param bytes - Raw segment bytes
  * @param lastManifestId - Manifest ID from the previous segment, or null for the first segment
  * @param state - Optional state from the previous segment for streamId/sequenceNumber checks
- * @param options - Optional custom continuity method validator
+ * @param options - Optional custom continuity method validator and trust policy
  * @returns Validation result, the manifest ID, and state to persist for the next call
  *
  * @example
@@ -234,7 +239,9 @@ export async function validateC2paManifestBoxSegment(
 	const integrity = internalData ? await validateManifestIntegrity(internalData) : null
 	const integrityCodes: readonly C2paStatusCode[] = integrity?.codes ?? []
 
-	const errorCodes: (LiveVideoStatusCode | C2paStatusCode)[] = [...liveVideoCodes, ...integrityCodes]
+	const trust = options?.trustPolicy ? await evaluateSignerTrust(options.trustPolicy, integrity) : null
+
+	const errorCodes: (LiveVideoStatusCode | C2paStatusCode)[] = [...liveVideoCodes, ...integrityCodes, ...(trust?.failure ? [trust.failure] : [])]
 
 	const currentManifestId = manifest?.instanceId ?? null
 
@@ -242,7 +249,7 @@ export async function validateC2paManifestBoxSegment(
 		result: {
 			manifest: manifest ?? null,
 			issuer,
-			certificate: integrity?.certificate ?? null,
+			certificate: integrity?.chain[0] ?? null,
 			sequenceNumber,
 			previousManifestId,
 			streamId,
@@ -250,6 +257,7 @@ export async function validateC2paManifestBoxSegment(
 			bmffHashHex: bmff.hashHex,
 			isValid: errorCodes.length === 0,
 			errorCodes,
+			...(trust && { isTrusted: trust.isTrusted }),
 		},
 		nextManifestId: currentManifestId ?? lastManifestId,
 		nextState: {

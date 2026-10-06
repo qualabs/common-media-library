@@ -33,7 +33,7 @@ if (init.isValid && init.merkleMaps.length > 0) {
 
 `merkleMaps` is not empty only when the `c2pa.hash.bmff.v3` assertion of the init segment has a `merkle` field.
 
-Check `isValid` before you use `merkleMaps`. The init manifest must carry a claim signature that verifies. An init segment without a `c2pa.signature` box fails with `C2paStatusCode.CLAIM_SIGNATURE_MISSING`, and its `merkleMaps` must not be trusted. The signature is verified with the certificate inside the manifest. The library does not check that certificate against a trust list. See [Signer Trust](results-and-error-codes.md#signer-trust).
+Check `isValid` before you use `merkleMaps`. The init manifest must carry a claim signature that verifies. An init segment without a `c2pa.signature` box fails with `C2paStatusCode.CLAIM_SIGNATURE_MISSING`, and its `merkleMaps` must not be trusted. The signature is verified with the certificate inside the manifest. To check that certificate against trust anchors, pass a `trustPolicy` to `validateC2paInitSegment`. See [Signer Trust Validation](trust-validation.md).
 
 ## Validating Media Segments
 

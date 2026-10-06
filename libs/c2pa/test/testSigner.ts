@@ -101,6 +101,25 @@ async function buildSelfSignedCertificate(privateKey: CryptoKey, spki: Uint8Arra
 }
 
 /**
+ * Creates a signer that signs claims with an existing P-256 key and carries `chain` in the `x5chain` header.
+ */
+export function createChainSigner(privateKey: CryptoKey, chain: readonly Uint8Array[]): Pick<TestSigner, 'sign'> {
+	// cbor-x reuses its output buffer between calls, so copy every encoding.
+	const protectedBytes = Uint8Array.from(CBOR.encode(new Map<number, unknown>([
+		[COSE_HEADER_ALG, COSE_ALG_ES256],
+		[COSE_HEADER_X5CHAIN, [...chain]],
+	])))
+
+	return {
+		async sign(claimCborBytes: Uint8Array): Promise<Uint8Array> {
+			const signature = await signEcdsaSha256(privateKey, buildSigStructure(protectedBytes, claimCborBytes))
+			const coseSign1 = Uint8Array.from(CBOR.encode([protectedBytes, new Map(), null, signature]))
+			return concat(new Uint8Array([COSE_SIGN1_TAG]), coseSign1)
+		},
+	}
+}
+
+/**
  * Creates a signer with a fresh P-256 key and a self-signed certificate, for tests that need
  * a manifest whose claim signature verifies. Key generation takes a few milliseconds, so create
  * one signer per test file.
@@ -109,19 +128,5 @@ export async function createTestSigner(issuer: string = 'CML Test Signer'): Prom
 	const keyPair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])
 	const spki = new Uint8Array(await crypto.subtle.exportKey('spki', keyPair.publicKey))
 	const certificateDER = await buildSelfSignedCertificate(keyPair.privateKey, spki, issuer)
-	// cbor-x reuses its output buffer between calls, so copy every encoding.
-	const protectedBytes = Uint8Array.from(CBOR.encode(new Map<number, unknown>([
-		[COSE_HEADER_ALG, COSE_ALG_ES256],
-		[COSE_HEADER_X5CHAIN, [certificateDER]],
-	])))
-
-	return {
-		certificateDER,
-		issuer,
-		async sign(claimCborBytes: Uint8Array): Promise<Uint8Array> {
-			const signature = await signEcdsaSha256(keyPair.privateKey, buildSigStructure(protectedBytes, claimCborBytes))
-			const coseSign1 = Uint8Array.from(CBOR.encode([protectedBytes, new Map(), null, signature]))
-			return concat(new Uint8Array([COSE_SIGN1_TAG]), coseSign1)
-		},
-	}
+	return { certificateDER, issuer, ...createChainSigner(keyPair.privateKey, [certificateDER]) }
 }

@@ -1,3 +1,4 @@
+import { C2paStatusCode } from '../C2paStatusCode.ts'
 import { verifyCoseSign1 } from '../cose/verifyCoseSign1.ts'
 import { decodeCoseSign1 } from '../cose/decodeCoseSign1.ts'
 import { extractVsiEmsgBox } from '../emsg/extractVsiEmsgBox.ts'
@@ -25,6 +26,9 @@ function findSessionKey(sessionKeys: readonly ValidatedSessionKey[], kidHex: str
  * verification, BMFF content hash, sequence number floor, and key validity.
  *
  * Returns `null` if the segment does not contain a C2PA EMSG box.
+ *
+ * The result carries the `isTrusted` value of the matched session key, which
+ * `validateC2paInitSegment` sets when it receives a trust policy.
  *
  * @param segmentBytes - Raw segment bytes
  * @param sessionKeys - Available session keys from the init segment
@@ -102,14 +106,21 @@ export async function validateC2paSegment(
 	// which is accurate for live streams validated in real time.
 	const keyExpired = isKeyExpired(sessionKey.createdAt, sessionKey.validityPeriod)
 
-	const codes = new Set<LiveVideoStatusCode>()
+	const { isTrusted } = sessionKey
+	const codes = new Set<LiveVideoStatusCode | C2paStatusCode>()
 	if (!signatureValid || !hashValid || !sequenceAboveMin) codes.add(LiveVideoStatusCode.SEGMENT_INVALID)
 	if (!sequenceResult.isValid) codes.add(LiveVideoStatusCode.ASSERTION_INVALID)
 	if (keyExpired) codes.add(LiveVideoStatusCode.SESSIONKEY_INVALID)
+	if (isTrusted === false) codes.add(C2paStatusCode.SIGNING_CREDENTIAL_UNTRUSTED)
 	const errorCodes = [...codes]
 
 	return {
-		result: { ...baseFields, isValid: errorCodes.length === 0, errorCodes },
+		result: {
+			...baseFields,
+			isValid: errorCodes.length === 0,
+			errorCodes,
+			...(isTrusted !== undefined && { isTrusted }),
+		},
 		nextSequenceState,
 	}
 }

@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { hashCertificate } from '../../src/trust/evaluateCertificateTrust.ts'
 
 const PKI_ENTRY_PATTERN = /^# (\S+)\n(-----BEGIN [^-]+-----[\s\S]*?-----END [^-]+-----)/gm
 const PEM_BODY_PATTERN = /-----BEGIN [^-]+-----([\s\S]*?)-----END [^-]+-----/
@@ -22,16 +23,12 @@ export function loadDer(name: string): Uint8Array {
 	return new Uint8Array(Buffer.from(body.replace(/\s/g, ''), 'base64'))
 }
 
-export async function certHash(der: Uint8Array): Promise<string> {
-	return Buffer.from(await crypto.subtle.digest('SHA-256', der as Uint8Array<ArrayBuffer>)).toString('base64')
-}
-
 /** Allowed list with one PEM block, one hash line, and lines the parser must skip. */
 export async function allowedListFixture(): Promise<string> {
 	return [
 		'# Allowed signers',
 		pem('self-signed-leaf'),
-		await certHash(loadDer('leaf-ec-expired')),
+		await hashCertificate(loadDer('leaf-ec-expired')),
 		'not-a-hash',
 		'QUJD',
 		'',

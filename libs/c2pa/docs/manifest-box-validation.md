@@ -175,4 +175,4 @@ The `ManifestBoxValidationResult` contains:
 > [!NOTE]
 > Unlike the VSI method, the Manifest Box method can produce both `LiveVideoStatusCode` and `C2paStatusCode` error codes. Each segment contains a full manifest, and the manifest goes through integrity checks: assertion hashes and claim signature verification.
 >
-> A segment without a `c2pa.signature` box fails with `C2paStatusCode.CLAIM_SIGNATURE_MISSING`. The claim signature is verified with the certificate inside the segment. The library does not check that certificate against a trust list. See [Signer Trust](results-and-error-codes.md#signer-trust).
+> A segment without a `c2pa.signature` box fails with `C2paStatusCode.CLAIM_SIGNATURE_MISSING`. The claim signature is verified with the certificate inside the segment. To check that certificate against trust anchors, pass a `trustPolicy` in the options. See [Signer Trust Validation](trust-validation.md).

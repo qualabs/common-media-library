@@ -13,6 +13,10 @@ export * from './segment/validateC2paSegment.ts'
 export * from './manifestbox/validateC2paManifestBoxSegment.ts'
 export * from './merkle/validateC2paMerkleSegment.ts'
 
+// Trust
+export * from './trust/createTrustPolicy.ts'
+export type * from './trust/TrustPolicy.ts'
+
 // Result types
 export type * from './C2paAssertion.ts'
 export type * from './C2paManifest.ts'

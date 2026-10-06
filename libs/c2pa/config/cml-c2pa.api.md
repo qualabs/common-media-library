@@ -49,6 +49,8 @@ export const C2paStatusCode: {
     readonly CLAIM_MISSING: "claim.missing";
     readonly ASSERTION_BMFFHASH_MALFORMED: "assertion.bmffHash.malformed";
     readonly ASSERTION_BMFFHASH_MISMATCH: "assertion.bmffHash.mismatch";
+    readonly SIGNING_CREDENTIAL_INVALID: "signingCredential.invalid";
+    readonly SIGNING_CREDENTIAL_UNTRUSTED: "signingCredential.untrusted";
 };
 
 // @public
@@ -63,6 +65,9 @@ export type CoseKeyJwk = {
 };
 
 // @public
+export function createTrustPolicy(options?: TrustPolicyOptions): Promise<TrustPolicy>;
+
+// @public
 export type InitSegmentValidation = {
     readonly manifest: C2paManifest | null;
     readonly certificate: Uint8Array | null;
@@ -71,6 +76,12 @@ export type InitSegmentValidation = {
     readonly merkleMaps: readonly MerkleMap[];
     readonly isValid: boolean;
     readonly errorCodes: readonly (LiveVideoStatusCode | C2paStatusCode)[];
+    readonly isTrusted?: boolean;
+};
+
+// @public
+export type InitSegmentValidationOptions = {
+    readonly trustPolicy?: TrustPolicy;
 };
 
 // @public
@@ -96,6 +107,7 @@ export type ManifestBoxValidationOptions = {
         readonly method: string;
         readonly validate: ManifestBoxContinuityValidator;
     };
+    readonly trustPolicy?: TrustPolicy;
 };
 
 // @public
@@ -110,6 +122,7 @@ export type ManifestBoxValidationResult = {
     readonly bmffHashHex: string | null;
     readonly isValid: boolean;
     readonly errorCodes: readonly (LiveVideoStatusCode | C2paStatusCode)[];
+    readonly isTrusted?: boolean;
 };
 
 // @public
@@ -128,6 +141,7 @@ export type MerkleMap = {
     readonly alg: string | null;
     readonly exclusions: readonly BmffHashExclusion[];
     readonly offsetPrefixSize: number;
+    readonly isTrusted?: boolean;
 };
 
 // @public
@@ -141,6 +155,7 @@ export type MerkleSegmentValidation = {
     readonly bmffHashHex: string | null;
     readonly isValid: boolean;
     readonly errorCodes: readonly (LiveVideoStatusCode | C2paStatusCode)[];
+    readonly isTrusted?: boolean;
 };
 
 // @public
@@ -151,7 +166,8 @@ export type SegmentValidationResult = {
     readonly kidHex: string | null;
     readonly sequenceResult: SequenceValidationResult;
     readonly isValid: boolean;
-    readonly errorCodes: readonly LiveVideoStatusCode[];
+    readonly errorCodes: readonly (LiveVideoStatusCode | C2paStatusCode)[];
+    readonly isTrusted?: boolean;
 };
 
 // @public
@@ -187,7 +203,19 @@ export type SequenceValidationResult = {
 };
 
 // @public
-export function validateC2paInitSegment(bytes: Uint8Array): Promise<InitSegmentValidation>;
+export type TrustPolicy = {
+    readonly loadErrors: readonly string[];
+};
+
+// @public
+export type TrustPolicyOptions = {
+    readonly trustAnchors?: string;
+    readonly allowedList?: string;
+    readonly trustConfig?: string;
+};
+
+// @public
+export function validateC2paInitSegment(bytes: Uint8Array, options?: InitSegmentValidationOptions): Promise<InitSegmentValidation>;
 
 // @public
 export function validateC2paManifestBoxSegment(bytes: Uint8Array, lastManifestId: string | null, state?: ManifestBoxValidationState, options?: ManifestBoxValidationOptions): Promise<{
@@ -215,6 +243,7 @@ export type ValidatedSessionKey = {
     readonly minSequenceNumber: number;
     readonly validityPeriod: number;
     readonly createdAt: string;
+    readonly isTrusted?: boolean;
 };
 
 // (No @packageDocumentation comment for this package)

@@ -10,7 +10,8 @@ import type { BmffHashExclusion } from '../bmff/BmffHashExclusion.ts'
 import { validateManifestIntegrity } from '../claim/validateManifestIntegrity.ts'
 import { convertCoseKeyToJwk } from '../cose/convertCoseKeyToJwk.ts'
 import { verifySignerBinding } from '../cose/verifySignerBinding.ts'
-import type { InitSegmentValidation, ValidatedSessionKey } from './InitSegmentValidation.ts'
+import type { InitSegmentValidation, InitSegmentValidationOptions, ValidatedSessionKey } from './InitSegmentValidation.ts'
+import { evaluateSignerTrust } from '../trust/evaluateCertificateTrust.ts'
 import { validateMerkleMaps } from '../merkle/validateMerkleMaps.ts'
 import { bytesToHex, hashesEqual, isKeyExpired, normalizeAlgorithmName } from '../utils.ts'
 
@@ -197,7 +198,12 @@ async function validateSessionKeys(
  * Only session keys with a valid signer binding and an unexpired validity period
  * are included in the result.
  *
+ * With a `trustPolicy`, the result, every session key, and every merkle map carry `isTrusted`.
+ * If the policy does not trust the signer, the result is not valid and `errorCodes` contains
+ * `signingCredential.untrusted` or `signingCredential.invalid` (§15.7).
+ *
  * @param bytes - Raw init segment bytes
+ * @param options - Optional trust policy
  * @returns Structured validation result (with `INIT_INVALID` error code if `mdat` box is present)
  * @throws If no C2PA UUID box is found
  *
@@ -206,7 +212,8 @@ async function validateSessionKeys(
  *
  * @public
  */
-export async function validateC2paInitSegment(bytes: Uint8Array): Promise<InitSegmentValidation> {
+export async function validateC2paInitSegment(bytes: Uint8Array, options?: InitSegmentValidationOptions): Promise<InitSegmentValidation> {
+	const trustPolicy = options?.trustPolicy
 	const boxes = readIsoBoxes(bytes)
 	if (findIsoBox(boxes, box => box.type === 'mdat')) {
 		return {
@@ -217,12 +224,14 @@ export async function validateC2paInitSegment(bytes: Uint8Array): Promise<InitSe
 			merkleMaps: [],
 			isValid: false,
 			errorCodes: [LiveVideoStatusCode.INIT_INVALID],
+			...(trustPolicy && { isTrusted: false }),
 		}
 	}
 
 	const internalData = readC2paManifest(bytes, boxes)
 	const { manifest } = internalData
-	const { codes: integrityCodes, certificate } = await validateManifestIntegrity(internalData)
+	const integrity = await validateManifestIntegrity(internalData)
+	const certificate = integrity.chain[0] ?? null
 
 	const bmffHashAssertion =
 		manifest.assertions.find(a => a.label === BMFF_HASH_ASSERTION_LABEL) ?? null
@@ -244,10 +253,13 @@ export async function validateC2paInitSegment(bytes: Uint8Array): Promise<InitSe
 	if (sessionKeys.length === 0 && merkleMaps === null) {
 		codes.add(LiveVideoStatusCode.SESSIONKEY_INVALID)
 	}
-	for (const code of integrityCodes) codes.add(code)
+	for (const code of integrity.codes) codes.add(code)
+
+	const trust = trustPolicy ? await evaluateSignerTrust(trustPolicy, integrity) : null
+	if (trust?.failure) codes.add(trust.failure)
 	const errorCodes = [...codes]
 
-	return {
+	const result: InitSegmentValidation = {
 		manifest,
 		certificate,
 		manifestId: manifest.instanceId,
@@ -255,5 +267,14 @@ export async function validateC2paInitSegment(bytes: Uint8Array): Promise<InitSe
 		merkleMaps: merkleMaps ?? [],
 		isValid: errorCodes.length === 0,
 		errorCodes,
+	}
+	if (!trust) return result
+
+	const { isTrusted } = trust
+	return {
+		...result,
+		sessionKeys: result.sessionKeys.map(key => ({ ...key, isTrusted })),
+		merkleMaps: result.merkleMaps.map(map => ({ ...map, isTrusted })),
+		isTrusted,
 	}
 }

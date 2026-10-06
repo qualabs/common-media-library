@@ -16,6 +16,8 @@ export type MerkleMap = {
 	readonly alg: string | null
 	readonly exclusions: readonly BmffHashExclusion[]
 	readonly offsetPrefixSize: number
+	/** `true` when the trust policy passed to `validateC2paInitSegment` trusts the signer of the init segment. Absent without a policy. */
+	readonly isTrusted?: boolean
 }
 
 /**
@@ -43,4 +45,6 @@ export type MerkleSegmentValidation = {
 	readonly bmffHashHex: string | null
 	readonly isValid: boolean
 	readonly errorCodes: readonly (LiveVideoStatusCode | C2paStatusCode)[]
+	/** `isTrusted` of the merkle maps that matched the segment. Absent when no matched map carries it. */
+	readonly isTrusted?: boolean
 }

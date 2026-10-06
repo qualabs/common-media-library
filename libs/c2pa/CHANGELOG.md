@@ -8,6 +8,20 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `createTrustPolicy`: loads trust anchors, an allowed list, and accepted EKUs from inline content, a URL, or a local path. The file formats are the same as the c2pa-rs trust settings. A source that fails to load does not throw. The policy lists the failure in `loadErrors` and trusts no certificate. See [Signer Trust Validation](docs/trust-validation.md).
+- `isTrusted` on `InitSegmentValidation`, `SegmentValidationResult`, `ManifestBoxValidationResult`, `MerkleSegmentValidation`, `ValidatedSessionKey`, and `MerkleMap`. The field is absent without a policy.
+- `C2paStatusCode.SIGNING_CREDENTIAL_UNTRUSTED` and `C2paStatusCode.SIGNING_CREDENTIAL_INVALID`. With a trust policy, a signer that the policy does not trust makes the result not valid, as C2PA 2.4 section 15.7 requires. A signing certificate that breaks the certificate profile of section 14.5.1.1 gives `signingCredential.invalid`. A policy with load errors trusts no signer.
+- `isTrusted` is `false` when the claim signature does not verify.
+- `validateC2paInitSegment` accepts an `InitSegmentValidationOptions` argument with a `trustPolicy`.
+- `ManifestBoxValidationOptions.trustPolicy`.
+
+### Changed
+
+- `SegmentValidationResult.errorCodes` can also contain `C2paStatusCode` values.
+- The claim signature check also reads the certificate chain from the legacy `x5chain` string header label. The integer label 33 still wins when both labels are present.
+
 ## [1.3.0] - 2026-09-29
 
 ### Fixed

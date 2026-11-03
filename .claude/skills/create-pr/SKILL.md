@@ -61,6 +61,14 @@ If any commits are missing DCO sign-off, report them and stop. Instruct the user
 git rebase main --exec "git commit --amend --signoff --no-edit"
 ```
 
+- **Plan files check**: plan files under `plans/` are working artifacts and never merge to `main` (see `AGENTS.md`). List the plan files that the branch adds or changes:
+
+```bash
+git diff --name-only --diff-filter=ACMR main...HEAD -- plans/
+```
+
+If the base branch is `main` and the command prints a file, stop. Tell the user to delete the plan files from the branch. Tell the user to record unfinished work as GitHub issues. For another base branch, remind the user to delete plan files before the branch merges to `main`.
+
 ### Step 1: Identify affected packages
 
 Examine the commit history and changed files to find which `libs/*` packages changed. That set decides the scopes for the PR title and which documentation errors block the PR in Step 3.
@@ -80,7 +88,7 @@ If the command fails, report the error and stop.
 Build the documentation to catch TSDoc errors, broken `{@includeCode}` references, and missing documentation:
 
 ```bash
-npm run build -w docs
+npm run build -w site
 ```
 
 Review the output for warnings and errors. If there are documentation errors related to the changed packages, report them and stop.

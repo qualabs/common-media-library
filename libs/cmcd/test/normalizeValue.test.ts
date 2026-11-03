@@ -1,7 +1,7 @@
 import type { CmcdFormatterOptions } from '@svta/cml-cmcd'
 import { SfItem, SfToken } from '@svta/cml-structured-field-values'
 import { deepEqual, equal, ok } from 'node:assert'
-import { describe, it } from 'node:test'
+import { describe, it } from 'vite-plus/test'
 import { CMCD_KEY_SPECS } from '../src/CMCD_KEY_SPECS.ts'
 import type { CmcdKeySpec } from '../src/CmcdKeySpec.ts'
 import { getKeySpec } from '../src/getKeySpec.ts'
@@ -90,7 +90,10 @@ describe('normalizeValue', () => {
 		const value = normalizeValue(new SfItem([1200.4, 3400], { p: 2 }), spec('br'), V2)
 		ok(value instanceof SfItem)
 		deepEqual(value.params, { p: 2 })
-		deepEqual((value.value as unknown as SfItem[]).map(item => item.value), [1200, 3400])
+		deepEqual(
+			(value.value as unknown as SfItem[]).map(item => item.value),
+			[1200, 3400],
+		)
 	})
 
 	it('returns one number for a list key in version 1', () => {

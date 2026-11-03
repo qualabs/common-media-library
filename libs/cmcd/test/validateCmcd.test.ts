@@ -1,6 +1,6 @@
 import { validateCmcd } from '@svta/cml-cmcd'
 import { equal } from 'node:assert'
-import { describe, it } from 'node:test'
+import { describe, it } from 'vite-plus/test'
 
 describe('validateCmcd', () => {
 	it('provides a valid example', () => {
@@ -19,8 +19,14 @@ describe('validateCmcd', () => {
 	it('collects mixed errors and warnings', () => {
 		const result = validateCmcd({ xyz: 123, bl: [150], v: 2 })
 		equal(result.valid, false)
-		equal(result.issues.some(i => i.severity === 'error'), true)
-		equal(result.issues.some(i => i.severity === 'warning'), true)
+		equal(
+			result.issues.some(i => i.severity === 'error'),
+			true,
+		)
+		equal(
+			result.issues.some(i => i.severity === 'warning'),
+			true,
+		)
 	})
 
 	it('returns valid when only warnings are present', () => {

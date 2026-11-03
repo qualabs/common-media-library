@@ -24,7 +24,13 @@ import {
 import { createTestSigner } from '../testSigner.ts'
 import { hashCertificate } from '../../src/trust/evaluateCertificateTrust.ts'
 import { loadDer, pem, PKI_PATH } from './trustFixtures.ts'
-import { buildManifestBoxSegment, buildVsiInitSegment, buildVsiSegment, createFixtureSigner, type VsiStream } from './trustStreams.ts'
+import {
+	buildManifestBoxSegment,
+	buildVsiInitSegment,
+	buildVsiSegment,
+	createFixtureSigner,
+	type VsiStream,
+} from './trustStreams.ts'
 
 type Scenario = {
 	readonly name: string
@@ -33,18 +39,38 @@ type Scenario = {
 }
 
 const SCENARIOS: readonly Scenario[] = [
-	{ name: 'trust anchor match', isTrusted: true, policy: () => createTrustPolicy({ trustAnchors: pem('root-ec') }) },
-	{ name: 'allowed list match', isTrusted: true, policy: async () => createTrustPolicy({ allowedList: `${await hashCertificate(loadDer('leaf-ec'))}\n` }) },
-	{ name: 'no match', isTrusted: false, policy: () => createTrustPolicy({ trustAnchors: pem('root-rsa') }) },
+	{
+		name: 'trust anchor match',
+		isTrusted: true,
+		policy: () => createTrustPolicy({ trustAnchors: pem('root-ec') }),
+	},
+	{
+		name: 'allowed list match',
+		isTrusted: true,
+		policy: async () =>
+			createTrustPolicy({ allowedList: `${await hashCertificate(loadDer('leaf-ec'))}\n` }),
+	},
+	{
+		name: 'no match',
+		isTrusted: false,
+		policy: () => createTrustPolicy({ trustAnchors: pem('root-rsa') }),
+	},
 	{
 		name: 'degraded by URL',
 		isTrusted: false,
 		policy: async () => {
 			mock.method(globalThis, 'fetch', async () => new Response('', { status: 503 }))
-			return createTrustPolicy({ trustAnchors: pem('root-ec'), allowedList: 'https://example.com/allowed.txt' })
+			return createTrustPolicy({
+				trustAnchors: pem('root-ec'),
+				allowedList: 'https://example.com/allowed.txt',
+			})
 		},
 	},
-	{ name: 'degraded by path', isTrusted: false, policy: () => createTrustPolicy({ trustAnchors: `${PKI_PATH}.missing` }) },
+	{
+		name: 'degraded by path',
+		isTrusted: false,
+		policy: () => createTrustPolicy({ trustAnchors: `${PKI_PATH}.missing` }),
+	},
 ]
 
 const SIGNATURE_LABEL = new TextEncoder().encode('c2pa.signature')
@@ -74,21 +100,40 @@ function trustCodes(scenario: Scenario): string[] {
 const MERKLE_UNIQUE_ID = 3
 const MERKLE_EXCLUSIONS = [{ xpath: '/uuid' }]
 
-async function buildMerkleStream(sign: Parameters<typeof buildSignedMerkleInitSegment>[1]): Promise<{ init: Uint8Array; segment: Uint8Array }> {
+async function buildMerkleStream(
+	sign: Parameters<typeof buildSignedMerkleInitSegment>[1],
+): Promise<{ init: Uint8Array; segment: Uint8Array }> {
 	const contents = [buildMediaContent(0), buildMediaContent(10)]
-	const leaves = await Promise.all(contents.map(c => computeBmffHash(c, { offsetPrefixSize: 8, exclusions: MERKLE_EXCLUSIONS })))
+	const leaves = await Promise.all(
+		contents.map(c => computeBmffHash(c, { offsetPrefixSize: 8, exclusions: MERKLE_EXCLUSIONS })),
+	)
 	const levels = await buildTreeLevels(leaves)
 	const initHash = await computeBmffHash(buildInitMediaBoxes(), { offsetPrefixSize: 8 })
-	const init = await buildSignedMerkleInitSegment({
-		exclusions: MERKLE_EXCLUSIONS,
-		merkle: [{ uniqueId: MERKLE_UNIQUE_ID, localId: 1, count: 2, hashes: manifestRow(levels, 1), alg: 'SHA-256', initHash }],
-	}, sign)
-	const segment = concatBytes(contents[0], buildMerkleAuxBox({
-		uniqueId: MERKLE_UNIQUE_ID,
-		localId: 1,
-		location: 0,
-		hashes: buildProofPath(levels, 0, 1),
-	}))
+	const init = await buildSignedMerkleInitSegment(
+		{
+			exclusions: MERKLE_EXCLUSIONS,
+			merkle: [
+				{
+					uniqueId: MERKLE_UNIQUE_ID,
+					localId: 1,
+					count: 2,
+					hashes: manifestRow(levels, 1),
+					alg: 'SHA-256',
+					initHash,
+				},
+			],
+		},
+		sign,
+	)
+	const segment = concatBytes(
+		contents[0],
+		buildMerkleAuxBox({
+			uniqueId: MERKLE_UNIQUE_ID,
+			localId: 1,
+			location: 0,
+			hashes: buildProofPath(levels, 0, 1),
+		}),
+	)
 	return { init, segment }
 }
 
@@ -155,7 +200,10 @@ describe('trust across validation paths', () => {
 				strictEqual(init.isValid, scenario.isTrusted)
 				deepStrictEqual(init.errorCodes, [...baseline.errorCodes, ...trustCodes(scenario)])
 				strictEqual(segment?.result.isValid, scenario.isTrusted)
-				deepStrictEqual(segment?.result.errorCodes, [...(baselineSegment?.result.errorCodes ?? []), ...trustCodes(scenario)])
+				deepStrictEqual(segment?.result.errorCodes, [
+					...(baselineSegment?.result.errorCodes ?? []),
+					...trustCodes(scenario),
+				])
 			})
 
 			it('Merkle: init and segment', async () => {
@@ -173,13 +221,21 @@ describe('trust across validation paths', () => {
 				strictEqual(init.isValid, scenario.isTrusted)
 				deepStrictEqual(init.errorCodes, [...baseline.errorCodes, ...trustCodes(scenario)])
 				strictEqual(segment.result.isValid, scenario.isTrusted)
-				deepStrictEqual(segment.result.errorCodes, [...baselineSegment.result.errorCodes, ...trustCodes(scenario)])
+				deepStrictEqual(segment.result.errorCodes, [
+					...baselineSegment.result.errorCodes,
+					...trustCodes(scenario),
+				])
 			})
 
 			it('ManifestBox: segment', async () => {
 				const trustPolicy = await scenario.policy()
 				const baseline = await validateC2paManifestBoxSegment(manifestBoxSegment, null)
-				const validated = await validateC2paManifestBoxSegment(manifestBoxSegment, null, undefined, { trustPolicy })
+				const validated = await validateC2paManifestBoxSegment(
+					manifestBoxSegment,
+					null,
+					undefined,
+					{ trustPolicy },
+				)
 
 				strictEqual(baseline.result.isValid, true)
 				strictEqual(validated.result.isTrusted, scenario.isTrusted)
@@ -195,7 +251,12 @@ describe('trust across validation paths', () => {
 	it('reports both an untrusted chain and a claim signature that does not verify', async () => {
 		const trustPolicy = await createTrustPolicy({ trustAnchors: pem('root-rsa') })
 
-		const box = await validateC2paManifestBoxSegment(forgeClaimSignature(manifestBoxSegment), null, undefined, { trustPolicy })
+		const box = await validateC2paManifestBoxSegment(
+			forgeClaimSignature(manifestBoxSegment),
+			null,
+			undefined,
+			{ trustPolicy },
+		)
 
 		ok(box.result.errorCodes.includes(C2paStatusCode.CLAIM_SIGNATURE_MISMATCH))
 		ok(box.result.errorCodes.includes(C2paStatusCode.SIGNING_CREDENTIAL_UNTRUSTED))
@@ -203,10 +264,15 @@ describe('trust across validation paths', () => {
 	})
 
 	it('rejects a signing certificate without an accepted EKU as an invalid credential', async () => {
-		const trustPolicy = await createTrustPolicy({ trustAnchors: pem('root-ec'), trustConfig: '1.3.6.1.4.1.62558.2.1\n' })
+		const trustPolicy = await createTrustPolicy({
+			trustAnchors: pem('root-ec'),
+			trustConfig: '1.3.6.1.4.1.62558.2.1\n',
+		})
 
 		const init = await validateC2paInitSegment(vsi.init, { trustPolicy })
-		const box = await validateC2paManifestBoxSegment(manifestBoxSegment, null, undefined, { trustPolicy })
+		const box = await validateC2paManifestBoxSegment(manifestBoxSegment, null, undefined, {
+			trustPolicy,
+		})
 
 		strictEqual(init.isValid, false)
 		ok(init.errorCodes.includes(C2paStatusCode.SIGNING_CREDENTIAL_INVALID))
@@ -229,7 +295,12 @@ describe('trust across validation paths', () => {
 	it('does not trust a signer whose claim signature does not verify', async () => {
 		const trustPolicy = await createTrustPolicy({ trustAnchors: pem('root-ec') })
 
-		const box = await validateC2paManifestBoxSegment(forgeClaimSignature(manifestBoxSegment), null, undefined, { trustPolicy })
+		const box = await validateC2paManifestBoxSegment(
+			forgeClaimSignature(manifestBoxSegment),
+			null,
+			undefined,
+			{ trustPolicy },
+		)
 		const init = await validateC2paInitSegment(forgeClaimSignature(vsi.init), { trustPolicy })
 
 		ok(box.result.errorCodes.includes(C2paStatusCode.CLAIM_SIGNATURE_MISMATCH))
@@ -253,9 +324,16 @@ describe('trust across validation paths', () => {
 	it('does not validate a segment against a fabricated trusted session key', async () => {
 		const trustPolicy = await createTrustPolicy({ trustAnchors: pem('root-ec') })
 		const init = await validateC2paInitSegment(vsi.init, { trustPolicy })
-		const impostor = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])
+		const impostor = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, [
+			'sign',
+			'verify',
+		])
 		const jwk = await crypto.subtle.exportKey('jwk', impostor.publicKey)
-		const fabricated: ValidatedSessionKey = { ...init.sessionKeys[0], jwk: { kty: 'EC', crv: 'P-256', x: jwk.x as string, y: jwk.y as string }, isTrusted: true }
+		const fabricated: ValidatedSessionKey = {
+			...init.sessionKeys[0],
+			jwk: { kty: 'EC', crv: 'P-256', x: jwk.x as string, y: jwk.y as string },
+			isTrusted: true,
+		}
 
 		const segment = await validateC2paSegment(vsiSegment, [fabricated])
 
@@ -271,8 +349,15 @@ describe('trust across validation paths', () => {
 
 		strictEqual(trustedInit.isTrusted, true)
 		strictEqual(untrustedInit.isTrusted, false)
-		strictEqual((await validateC2paMerkleSegment(untrusted.segment, untrustedInit.merkleMaps)).result.isTrusted, false)
-		strictEqual((await validateC2paMerkleSegment(merkle.segment, trustedInit.merkleMaps)).result.isTrusted, true)
+		strictEqual(
+			(await validateC2paMerkleSegment(untrusted.segment, untrustedInit.merkleMaps)).result
+				.isTrusted,
+			false,
+		)
+		strictEqual(
+			(await validateC2paMerkleSegment(merkle.segment, trustedInit.merkleMaps)).result.isTrusted,
+			true,
+		)
 	})
 
 	it('verifies the chain of repeated ManifestBox segments once', async () => {
@@ -291,7 +376,10 @@ describe('trust across validation paths', () => {
 
 	it('reports an untrusted init without certificate as not trusted', async () => {
 		const trustPolicy = await createTrustPolicy({ trustAnchors: pem('root-ec') })
-		const mdatInit = concatBytes(buildInitMediaBoxes(), new Uint8Array([0, 0, 0, 8, 0x6d, 0x64, 0x61, 0x74]))
+		const mdatInit = concatBytes(
+			buildInitMediaBoxes(),
+			new Uint8Array([0, 0, 0, 8, 0x6d, 0x64, 0x61, 0x74]),
+		)
 
 		const init = await validateC2paInitSegment(mdatInit, { trustPolicy })
 

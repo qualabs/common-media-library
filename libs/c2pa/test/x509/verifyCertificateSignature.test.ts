@@ -26,7 +26,10 @@ describe('verifyCertificateSignature', () => {
 
 	for (const family of ['rsa', 'pss', 'ed25519']) {
 		it(`verifies a ${family} leaf against its root`, async () => {
-			strictEqual(await verifyCertificateSignature(parse(`leaf-${family}`), parse(`root-${family}`)), true)
+			strictEqual(
+				await verifyCertificateSignature(parse(`leaf-${family}`), parse(`root-${family}`)),
+				true,
+			)
 		})
 
 		it(`verifies a self-signed ${family} root`, async () => {
@@ -44,11 +47,23 @@ describe('verifyCertificateSignature', () => {
 		const leaf = parse('leaf-ec')
 		const tampered = leaf.tbsCertificate.slice()
 		tampered[tampered.length - 1] ^= 0xff
-		strictEqual(await verifyCertificateSignature({ ...leaf, tbsCertificate: tampered }, parse('intermediate-ec')), false)
+		strictEqual(
+			await verifyCertificateSignature(
+				{ ...leaf, tbsCertificate: tampered },
+				parse('intermediate-ec'),
+			),
+			false,
+		)
 	})
 
 	it('rejects an unsupported signature algorithm', async () => {
 		const leaf = parse('leaf-ec')
-		strictEqual(await verifyCertificateSignature({ ...leaf, signatureAlgorithm: '1.2.840.113549.1.1.5' }, parse('intermediate-ec')), false)
+		strictEqual(
+			await verifyCertificateSignature(
+				{ ...leaf, signatureAlgorithm: '1.2.840.113549.1.1.5' },
+				parse('intermediate-ec'),
+			),
+			false,
+		)
 	})
 })

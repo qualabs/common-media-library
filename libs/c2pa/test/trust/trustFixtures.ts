@@ -7,7 +7,10 @@ const PEM_BODY_PATTERN = /-----BEGIN [^-]+-----([\s\S]*?)-----END [^-]+-----/
 export const PKI_PATH: string = new URL('../fixtures/trust/pki.pem', import.meta.url).pathname
 
 const PKI: ReadonlyMap<string, string> = new Map(
-	[...readFileSync(PKI_PATH, 'utf8').matchAll(PKI_ENTRY_PATTERN)].map(([, name, block]) => [name, block]),
+	[...readFileSync(PKI_PATH, 'utf8').matchAll(PKI_ENTRY_PATTERN)].map(([, name, block]) => [
+		name,
+		block,
+	]),
 )
 
 /** PEM block of a certificate or key in `pki.pem`. */

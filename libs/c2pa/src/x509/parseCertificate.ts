@@ -97,8 +97,16 @@ export type ParsedCertificate = {
 	readonly hasUnknownCriticalExtension: boolean
 }
 
-type Extensions = Pick<ParsedCertificate,
-	'ekuOids' | 'isCa' | 'pathLength' | 'digitalSignature' | 'keyCertSign' | 'hasAuthorityKeyId' | 'hasUnknownCriticalExtension'>
+type Extensions = Pick<
+	ParsedCertificate,
+	| 'ekuOids'
+	| 'isCa'
+	| 'pathLength'
+	| 'digitalSignature'
+	| 'keyCertSign'
+	| 'hasAuthorityKeyId'
+	| 'hasUnknownCriticalExtension'
+>
 
 type PublicKeyInfo = Pick<ParsedCertificate, 'keyAlgorithm' | 'keyCurve' | 'rsaModulusBits'>
 
@@ -119,14 +127,24 @@ function parseTime(element: Asn1Element): Date | null {
 	if (element.tag === ASN1_TAG_UTC_TIME && (match = UTC_TIME_PATTERN.exec(text))) {
 		const yy = Number(match[1])
 		year = yy >= 50 ? 1900 + yy : 2000 + yy
-	}
-	else if (element.tag === ASN1_TAG_GENERALIZED_TIME && (match = GENERALIZED_TIME_PATTERN.exec(text))) {
+	} else if (
+		element.tag === ASN1_TAG_GENERALIZED_TIME &&
+		(match = GENERALIZED_TIME_PATTERN.exec(text))
+	) {
 		year = Number(match[1])
-	}
-	else {
+	} else {
 		return null
 	}
-	return new Date(Date.UTC(year, Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]), Number(match[6])))
+	return new Date(
+		Date.UTC(
+			year,
+			Number(match[2]) - 1,
+			Number(match[3]),
+			Number(match[4]),
+			Number(match[5]),
+			Number(match[6]),
+		),
+	)
 }
 
 type Asn1Child = Asn1Element & { readonly raw: Uint8Array }
@@ -152,12 +170,14 @@ function parseExtensions(wrapper: Uint8Array): Extensions {
 		const fields = readChildren(ext.value)
 		const oidEl = fields[0]
 		const valueEl = fields[fields.length - 1]
-		if (oidEl?.tag !== ASN1_TAG_OBJECT_IDENTIFIER || valueEl?.tag !== ASN1_TAG_OCTET_STRING) continue
+		if (oidEl?.tag !== ASN1_TAG_OBJECT_IDENTIFIER || valueEl?.tag !== ASN1_TAG_OCTET_STRING)
+			continue
 		const inner = readElement(valueEl.value, 0)
 		if (!inner) throw new Error('Malformed extension value')
 
 		const oid = decodeOid(oidEl.value)
-		const critical = fields.length === 3 && fields[1].tag === ASN1_TAG_BOOLEAN && fields[1].value[0] !== 0
+		const critical =
+			fields.length === 3 && fields[1].tag === ASN1_TAG_BOOLEAN && fields[1].value[0] !== 0
 		if (critical && !KNOWN_EXTENSIONS.has(oid)) result.hasUnknownCriticalExtension = true
 
 		switch (oid) {
@@ -201,10 +221,16 @@ function parsePublicKeyInfo(spki: Uint8Array): PublicKeyInfo {
 	if (algOid?.tag !== ASN1_TAG_OBJECT_IDENTIFIER) throw new Error('Malformed public key algorithm')
 	const keyAlgorithm = decodeOid(algOid.value)
 
-	const keyCurve = keyAlgorithm === OID_EC_PUBLIC_KEY && params?.tag === ASN1_TAG_OBJECT_IDENTIFIER ? NAMED_CURVES[decodeOid(params.value)] ?? null : null
+	const keyCurve =
+		keyAlgorithm === OID_EC_PUBLIC_KEY && params?.tag === ASN1_TAG_OBJECT_IDENTIFIER
+			? (NAMED_CURVES[decodeOid(params.value)] ?? null)
+			: null
 
 	let rsaModulusBits: number | null = null
-	if ((keyAlgorithm === OID_RSA_ENCRYPTION || keyAlgorithm === OID_RSASSA_PSS) && key?.tag === ASN1_TAG_BIT_STRING) {
+	if (
+		(keyAlgorithm === OID_RSA_ENCRYPTION || keyAlgorithm === OID_RSASSA_PSS) &&
+		key?.tag === ASN1_TAG_BIT_STRING
+	) {
 		const rsaKey = readElement(key.value, 1)
 		const modulus = rsaKey?.tag === ASN1_TAG_SEQUENCE ? readElement(rsaKey.value, 0) : null
 		if (modulus?.tag === ASN1_TAG_INTEGER) rsaModulusBits = countBits(modulus.value)
@@ -225,7 +251,12 @@ export function parseCertificate(certDER: Uint8Array): ParsedCertificate | null 
 		const cert = readElement(certDER, 0)
 		if (!cert || cert.tag !== ASN1_TAG_SEQUENCE) return null
 		const [tbs, sigAlg, sigValue] = readChildren(cert.value)
-		if (tbs?.tag !== ASN1_TAG_SEQUENCE || sigAlg?.tag !== ASN1_TAG_SEQUENCE || sigValue?.tag !== ASN1_TAG_BIT_STRING) return null
+		if (
+			tbs?.tag !== ASN1_TAG_SEQUENCE ||
+			sigAlg?.tag !== ASN1_TAG_SEQUENCE ||
+			sigValue?.tag !== ASN1_TAG_BIT_STRING
+		)
+			return null
 
 		const [algOid, algParams] = readChildren(sigAlg.value)
 		if (algOid?.tag !== ASN1_TAG_OBJECT_IDENTIFIER) return null
@@ -235,8 +266,13 @@ export function parseCertificate(certDER: Uint8Array): ParsedCertificate | null 
 		const versionEl = start ? readElement(tbsFields[0].value, 0) : null
 		const version = versionEl?.tag === ASN1_TAG_INTEGER ? readUnsigned(versionEl.value) + 1 : 1
 		const [serial, , issuer, validity, subject, spki, ...optional] = tbsFields.slice(start)
-		if (serial?.tag !== ASN1_TAG_INTEGER || issuer?.tag !== ASN1_TAG_SEQUENCE || validity?.tag !== ASN1_TAG_SEQUENCE ||
-			subject?.tag !== ASN1_TAG_SEQUENCE || spki?.tag !== ASN1_TAG_SEQUENCE) {
+		if (
+			serial?.tag !== ASN1_TAG_INTEGER ||
+			issuer?.tag !== ASN1_TAG_SEQUENCE ||
+			validity?.tag !== ASN1_TAG_SEQUENCE ||
+			subject?.tag !== ASN1_TAG_SEQUENCE ||
+			spki?.tag !== ASN1_TAG_SEQUENCE
+		) {
 			return null
 		}
 
@@ -260,13 +296,13 @@ export function parseCertificate(certDER: Uint8Array): ParsedCertificate | null 
 			notAfter,
 			spki: spki.raw,
 			version,
-			hasUniqueIds: optional.some(el => el.tag === ISSUER_UNIQUE_ID_TAG || el.tag === SUBJECT_UNIQUE_ID_TAG),
+			hasUniqueIds: optional.some(
+				el => el.tag === ISSUER_UNIQUE_ID_TAG || el.tag === SUBJECT_UNIQUE_ID_TAG,
+			),
 			...parsePublicKeyInfo(spki.value),
 			...extensions,
 		}
-	}
-	catch {
+	} catch {
 		return null
 	}
 }
-

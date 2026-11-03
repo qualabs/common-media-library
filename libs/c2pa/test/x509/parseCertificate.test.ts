@@ -46,7 +46,10 @@ describe('parseCertificate', () => {
 	})
 
 	it('extracts every EKU OID', () => {
-		deepStrictEqual(parseCertificate(loadDer('leaf-ec-any-eku'))?.ekuOids, [EKU_DOCUMENT_SIGNING, EKU_ANY])
+		deepStrictEqual(parseCertificate(loadDer('leaf-ec-any-eku'))?.ekuOids, [
+			EKU_DOCUMENT_SIGNING,
+			EKU_ANY,
+		])
 		deepStrictEqual(parseCertificate(loadDer('leaf-ec-no-eku'))?.ekuOids, [])
 	})
 

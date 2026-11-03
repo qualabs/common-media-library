@@ -1,6 +1,6 @@
 import { SfItem } from '@svta/cml-structured-field-values'
 import { deepEqual, equal } from 'node:assert'
-import { describe, it } from 'node:test'
+import { describe, it } from 'vite-plus/test'
 import { toBareValue } from '../src/toBareValue.ts'
 
 describe('toBareValue', () => {
@@ -13,7 +13,10 @@ describe('toBareValue', () => {
 
 	it('returns the list inside an SfItem that wraps a list', () => {
 		const list = toBareValue(new SfItem([1200, 3400], { p: 2 })) as SfItem<number>[]
-		deepEqual(list.map(item => item.value), [1200, 3400])
+		deepEqual(
+			list.map(item => item.value),
+			[1200, 3400],
+		)
 	})
 
 	it('returns any other value unchanged', () => {

@@ -8,6 +8,30 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [2.8.4] - 2026-10-26
+
+### Changed
+
+- `recordResponseReceived` derives `ttfb` with `getTimeToFirstByte` from `@svta/cml-utils`. The report omits `ttfb` when `responseStart` is before `startTime` or after the end of the response, or when `duration` is missing. Before, the report held `responseStart - startTime` for any `responseStart` ([#587](https://github.com/streaming-video-technology-alliance/common-media-library/issues/587)).
+- The `validateCmcdEventReport` doc now renders the example code block. The docs build no longer warns about the `@example` tag.
+- The README now has a When to use section. The section names the tasks that the package covers and the entry point of each task.
+- Every code example in the guides now typechecks. The `recordResponseReceived` examples now include `encodedBodySize` ([#565](https://github.com/streaming-video-technology-alliance/common-media-library/issues/565)).
+
+## [2.8.3] - 2026-10-18
+
+### Changed
+
+- Both overloads of `decodeCmcd`, `fromCmcdHeaders`, `fromCmcdQuery`, and `fromCmcdUrl` now have a doc comment.
+- The `CmcdTransformRequest` doc now links to `DeepReadonly` in `@svta/cml-utils`.
+- Peer dependency ranges are now caret ranges, for example `^1.6.2` instead of `1.6.2`. A later patch or minor release of a peer no longer requires a new release of this package.
+
+## [2.8.2] - 2026-10-08
+
+### Fixed
+
+- `dist/index.js` now parses as ES2021. A bundler no longer needs to transpile the package for an ES2021 target
+- A webpack bundle with a bare import of the package no longer contains code from the package
+
 ## [2.8.1] - 2026-10-01
 
 ### Fixed
@@ -324,7 +348,10 @@ and this project adheres to
 - Convert to mono-repo ([#238](https://github.com/streaming-video-technology-alliance/common-media-library/issues/238))
 - Produce single bundled export for each package ([#260](https://github.com/streaming-video-technology-alliance/common-media-library/issues/260))
 
-[Unreleased]: https://github.com/streaming-video-technology-alliance/common-media-library/compare/cmcd-v2.8.1...HEAD
+[Unreleased]: https://github.com/streaming-video-technology-alliance/common-media-library/compare/cmcd-v2.8.4...HEAD
+[2.8.4]: https://github.com/streaming-video-technology-alliance/common-media-library/compare/cmcd-v2.8.3...cmcd-v2.8.4
+[2.8.3]: https://github.com/streaming-video-technology-alliance/common-media-library/compare/cmcd-v2.8.2...cmcd-v2.8.3
+[2.8.2]: https://github.com/streaming-video-technology-alliance/common-media-library/compare/cmcd-v2.8.1...cmcd-v2.8.2
 [2.8.1]: https://github.com/streaming-video-technology-alliance/common-media-library/compare/cmcd-v2.8.0...cmcd-v2.8.1
 [2.8.0]: https://github.com/streaming-video-technology-alliance/common-media-library/compare/cmcd-v2.7.0...cmcd-v2.8.0
 [2.7.0]: https://github.com/streaming-video-technology-alliance/common-media-library/compare/cmcd-v2.6.1...cmcd-v2.7.0

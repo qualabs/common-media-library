@@ -2,7 +2,11 @@ import { encodeBase64 } from '@svta/cml-utils'
 import { C2paStatusCode } from '../C2paStatusCode.ts'
 import type { ManifestIntegrity } from '../claim/validateManifestIntegrity.ts'
 import { hashesEqual } from '../utils.ts'
-import { OID_EC_PUBLIC_KEY, parseCertificate, type ParsedCertificate } from '../x509/parseCertificate.ts'
+import {
+	OID_EC_PUBLIC_KEY,
+	parseCertificate,
+	type ParsedCertificate,
+} from '../x509/parseCertificate.ts'
 import { verifyCertificateSignature } from '../x509/verifyCertificateSignature.ts'
 import type { TrustPolicy } from './TrustPolicy.ts'
 
@@ -30,7 +34,9 @@ const ALWAYS: TrustWindow = { notBefore: -Infinity, notAfter: Infinity }
  *
  * @internal
  */
-export type CredentialFailure = typeof C2paStatusCode.SIGNING_CREDENTIAL_INVALID | typeof C2paStatusCode.SIGNING_CREDENTIAL_UNTRUSTED
+export type CredentialFailure =
+	| typeof C2paStatusCode.SIGNING_CREDENTIAL_INVALID
+	| typeof C2paStatusCode.SIGNING_CREDENTIAL_UNTRUSTED
 
 /**
  * Parsed contents of a trust policy that loaded without errors.
@@ -61,7 +67,9 @@ export function bindTrustPolicyState(policy: TrustPolicy, state: TrustPolicyStat
  * @internal
  */
 export async function hashCertificate(der: Uint8Array): Promise<string> {
-	return encodeBase64(new Uint8Array(await crypto.subtle.digest('SHA-256', der as Uint8Array<ArrayBuffer>)))
+	return encodeBase64(
+		new Uint8Array(await crypto.subtle.digest('SHA-256', der as Uint8Array<ArrayBuffer>)),
+	)
 }
 
 function canIssue(cert: ParsedCertificate): boolean {
@@ -76,7 +84,13 @@ function meetsKeyRequirements(cert: ParsedCertificate): boolean {
 
 // C2PA 2.4 §14.5.1.1: the requirements for a certificate that signs claims.
 function meetsSignerProfile(leaf: ParsedCertificate): boolean {
-	if (!meetsKeyRequirements(leaf) || leaf.version !== X509_VERSION_3 || leaf.hasUniqueIds || leaf.hasUnknownCriticalExtension) return false
+	if (
+		!meetsKeyRequirements(leaf) ||
+		leaf.version !== X509_VERSION_3 ||
+		leaf.hasUniqueIds ||
+		leaf.hasUnknownCriticalExtension
+	)
+		return false
 	if (leaf.isCa || leaf.keyCertSign || !leaf.digitalSignature) return false
 	if (!leaf.hasAuthorityKeyId && !hashesEqual(leaf.issuer, leaf.subject)) return false
 
@@ -88,22 +102,32 @@ function meetsSignerProfile(leaf: ParsedCertificate): boolean {
 
 // RFC 5280 §6.1: a path with an unknown critical extension or a broken pathLenConstraint fails.
 function meetsPathConstraints(path: readonly ParsedCertificate[]): boolean {
-	return path.every((cert, i) =>
-		!cert.hasUnknownCriticalExtension && (i === 0 || cert.pathLength === null || i - 1 <= cert.pathLength))
+	return path.every(
+		(cert, i) =>
+			!cert.hasUnknownCriticalExtension &&
+			(i === 0 || cert.pathLength === null || i - 1 <= cert.pathLength),
+	)
 }
 
 async function isIssuedBy(child: ParsedCertificate, parent: ParsedCertificate): Promise<boolean> {
-	return canIssue(parent) && hashesEqual(child.issuer, parent.subject) && verifyCertificateSignature(child, parent)
+	return (
+		canIssue(parent) &&
+		hashesEqual(child.issuer, parent.subject) &&
+		verifyCertificateSignature(child, parent)
+	)
 }
 
-async function buildAnchorPath(chain: readonly ParsedCertificate[], anchors: readonly ParsedCertificate[]): Promise<ParsedCertificate[] | null> {
+async function buildAnchorPath(
+	chain: readonly ParsedCertificate[],
+	anchors: readonly ParsedCertificate[],
+): Promise<ParsedCertificate[] | null> {
 	for (let i = 0; i < chain.length; i++) {
 		const current = chain[i]
 		if (anchors.some(anchor => hashesEqual(anchor.der, current.der))) return chain.slice(0, i + 1)
 
 		const parent = chain[i + 1]
 		if (parent) {
-			if (!await isIssuedBy(current, parent)) return null
+			if (!(await isIssuedBy(current, parent))) return null
 			continue
 		}
 
@@ -116,7 +140,11 @@ async function buildAnchorPath(chain: readonly ParsedCertificate[], anchors: rea
 
 // Verifies everything except the time. The caller compares the window with the current time,
 // so a cached verdict follows the validity period of the certificates.
-async function evaluate(state: TrustPolicyState, chain: readonly Uint8Array[], leafHash: string): Promise<TrustWindow | CredentialFailure> {
+async function evaluate(
+	state: TrustPolicyState,
+	chain: readonly Uint8Array[],
+	leafHash: string,
+): Promise<TrustWindow | CredentialFailure> {
 	if (state.allowedHashes.has(leafHash)) {
 		const leaf = parseCertificate(chain[0])
 		return leaf && meetsKeyRequirements(leaf) ? ALWAYS : C2paStatusCode.SIGNING_CREDENTIAL_INVALID
@@ -130,7 +158,8 @@ async function evaluate(state: TrustPolicyState, chain: readonly Uint8Array[], l
 	}
 
 	const leaf = parsed[0]
-	if (!meetsSignerProfile(leaf) || !leaf.ekuOids.some(oid => state.ekuOids.has(oid))) return C2paStatusCode.SIGNING_CREDENTIAL_INVALID
+	if (!meetsSignerProfile(leaf) || !leaf.ekuOids.some(oid => state.ekuOids.has(oid)))
+		return C2paStatusCode.SIGNING_CREDENTIAL_INVALID
 
 	const path = await buildAnchorPath(parsed, state.anchors)
 	if (!path || !meetsPathConstraints(path)) return C2paStatusCode.SIGNING_CREDENTIAL_UNTRUSTED
@@ -157,22 +186,31 @@ async function evaluate(state: TrustPolicyState, chain: readonly Uint8Array[], l
  *
  * @internal
  */
-export async function evaluateCertificateTrust(policy: TrustPolicy, chain: readonly Uint8Array[]): Promise<CredentialFailure | null> {
+export async function evaluateCertificateTrust(
+	policy: TrustPolicy,
+	chain: readonly Uint8Array[],
+): Promise<CredentialFailure | null> {
 	const state = POLICY_STATES.get(policy)
-	if (!state || policy.loadErrors.length > 0 || chain.length === 0) return C2paStatusCode.SIGNING_CREDENTIAL_UNTRUSTED
+	if (!state || policy.loadErrors.length > 0 || chain.length === 0)
+		return C2paStatusCode.SIGNING_CREDENTIAL_UNTRUSTED
 
 	const hashes = await Promise.all(chain.map(hashCertificate))
 	const key = hashes.join(':')
 	let pending = state.cache.get(key)
 	if (!pending) {
-		pending = evaluate(state, chain, hashes[0]).catch(() => C2paStatusCode.SIGNING_CREDENTIAL_UNTRUSTED)
-		if (state.cache.size >= MAX_CACHED_CHAINS) state.cache.delete(state.cache.keys().next().value as string)
+		pending = evaluate(state, chain, hashes[0]).catch(
+			() => C2paStatusCode.SIGNING_CREDENTIAL_UNTRUSTED,
+		)
+		if (state.cache.size >= MAX_CACHED_CHAINS)
+			state.cache.delete(state.cache.keys().next().value as string)
 		state.cache.set(key, pending)
 	}
 	const verdict = await pending
 	if (typeof verdict === 'string') return verdict
 	const now = Date.now()
-	return verdict.notBefore <= now && now <= verdict.notAfter ? null : C2paStatusCode.SIGNING_CREDENTIAL_UNTRUSTED
+	return verdict.notBefore <= now && now <= verdict.notAfter
+		? null
+		: C2paStatusCode.SIGNING_CREDENTIAL_UNTRUSTED
 }
 
 /**

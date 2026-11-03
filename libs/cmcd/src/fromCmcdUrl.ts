@@ -21,8 +21,24 @@ import { decodeCmcd } from './decodeCmcd.ts'
  * @example
  * {@includeCode ../test/fromCmcdUrl.test.ts#example}
  */
-export function fromCmcdUrl(url: string, options: CmcdDecodeOptions & { convertToLatest: true }): Cmcd
+export function fromCmcdUrl(
+	url: string,
+	options: CmcdDecodeOptions & { convertToLatest: true },
+): Cmcd
+/**
+ * Decode CMCD data from a URL encoded string.
+ *
+ * @param url - The URL encoded string to decode.
+ * @param options - Options for decoding.
+ *
+ * @returns The decoded CMCD data.
+ *
+ * @public
+ */
 export function fromCmcdUrl(url: string, options?: CmcdDecodeOptions): CmcdData
 export function fromCmcdUrl(url: string, options?: CmcdDecodeOptions): CmcdData | Cmcd {
-	return decodeCmcd(decodeURIComponent(url.replace(/^CMCD=/, '').replace(/\+/g, ' ')), options as CmcdDecodeOptions)
+	return decodeCmcd(
+		decodeURIComponent(url.replace(/^CMCD=/, '').replace(/\+/g, ' ')),
+		options as CmcdDecodeOptions,
+	)
 }

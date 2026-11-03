@@ -35,11 +35,13 @@ function unwrapValue(value: unknown, ot: string | undefined): unknown {
 			continue
 		}
 
-		if (ot && item.params?.[ot] === true) {
+		const params = item.params as Record<string, unknown> | undefined
+
+		if (ot && params?.[ot] === true) {
 			return item.value
 		}
 
-		if (fallback === undefined && !hasParams(item.params)) {
+		if (fallback === undefined && !hasParams(params)) {
 			fallback = item.value
 		}
 	}
@@ -55,33 +57,35 @@ function unwrapValue(value: unknown, ot: string | undefined): unknown {
  *
  * @internal
  */
-export function downConvertToV1(obj: Record<string, any>, ot: string | undefined): Record<string, any> {
-	const result: Record<string, any> = {}
+export function downConvertToV1(
+	obj: Record<string, any>,
+	ot: string | undefined,
+): Record<string, any> {
+	const result: Record<string, unknown> = {}
 
-	for (const [key, value] of Object.entries(obj)) {
+	for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
 		if (value == null) {
 			result[key] = value
 			continue
 		}
 
 		if (key === 'nor') {
-			const list = value instanceof SfItem && Array.isArray(value.value) ? value.value : value
-			const first = Array.isArray(list) ? list[0] : list
+			const list: unknown =
+				value instanceof SfItem && Array.isArray(value.value) ? value.value : value
+			const first: unknown = Array.isArray(list) ? list[0] : list
 
 			if (first instanceof SfItem) {
+				const params = first.params as Record<string, unknown> | undefined
 				result['nor'] = first.value
-				if (first.params?.r) {
-					result['nrr'] = first.params.r
+				if (params?.['r']) {
+					result['nrr'] = params['r']
 				}
-			}
-			else {
+			} else {
 				result['nor'] = first
 			}
-		}
-		else if (CMCD_INNER_LIST_KEYS.has(key)) {
+		} else if (CMCD_INNER_LIST_KEYS.has(key)) {
 			result[key] = unwrapValue(value, ot)
-		}
-		else {
+		} else {
 			result[key] = value
 		}
 	}

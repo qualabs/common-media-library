@@ -6,7 +6,7 @@ import {
 } from '../../src/extractManifestCertificate.ts'
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
 import { readFileSync } from 'node:fs'
-import { describe, it } from 'node:test'
+import { describe, it } from 'vite-plus/test'
 
 describe('extractManifestCertificate', () => {
 	// #region example
@@ -40,10 +40,12 @@ describe('extractCertificateChainFromSignatureBytes', () => {
 	const LEAF = new Uint8Array([0x30, 0x01, 0x01])
 	const INTERMEDIATE = new Uint8Array([0x30, 0x01, 0x02])
 	const OTHER = new Uint8Array([0x30, 0x01, 0x03])
+	const COSE_SIGN1_TAG = 0xd2
 
 	function coseWithHeader(header: Map<number | string, unknown>): Uint8Array {
 		const protectedBytes = Uint8Array.from(CBOR.encode(header))
-		return Uint8Array.from(CBOR.encode([protectedBytes, new Map(), null, new Uint8Array(64)]))
+		const coseSign1 = CBOR.encode([protectedBytes, new Map(), null, new Uint8Array(64)])
+		return Uint8Array.from([COSE_SIGN1_TAG, ...coseSign1])
 	}
 
 	it('returns the full chain from the integer label', () => {
@@ -58,7 +60,12 @@ describe('extractCertificateChainFromSignatureBytes', () => {
 	})
 
 	it('prefers the integer label when both labels are present', () => {
-		const cose = coseWithHeader(new Map<number | string, unknown>([['x5chain', [OTHER]], [33, [LEAF]]]))
+		const cose = coseWithHeader(
+			new Map<number | string, unknown>([
+				['x5chain', [OTHER]],
+				[33, [LEAF]],
+			]),
+		)
 		deepStrictEqual(extractCertificateChainFromSignatureBytes(cose), [LEAF])
 	})
 
@@ -68,7 +75,10 @@ describe('extractCertificateChainFromSignatureBytes', () => {
 	})
 
 	it('returns an empty chain without x5chain or for invalid bytes', () => {
-		deepStrictEqual(extractCertificateChainFromSignatureBytes(coseWithHeader(new Map([[1, -7]]))), [])
+		deepStrictEqual(
+			extractCertificateChainFromSignatureBytes(coseWithHeader(new Map([[1, -7]]))),
+			[],
+		)
 		deepStrictEqual(extractCertificateChainFromSignatureBytes(new Uint8Array([0xff])), [])
 	})
 })

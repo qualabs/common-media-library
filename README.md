@@ -6,8 +6,9 @@ Open source players such as [hls.js](https://github.com/video-dev/hls.js/), [das
 
 ## Project structure
 
-This project is a monorepo with three workspaces: `libs`, `docs`, and `dev`. The `libs` workspace contains the individual libraries, which are published to npm. The `docs` workspace contains the documentation for all the libraries. The documentation is published as one site on GitHub Pages. The `dev` workspace is a private development server. The available libraries are:
+This project is a monorepo with three workspaces: `libs`, `site`, and `dev`. The `libs` workspace contains the individual libraries, which are published to npm. The `site` workspace contains the website: the landing page, the package guides, and the API reference. The site is published on GitHub Pages. The `dev` workspace is a private development server. The available libraries are:
 
+- `@svta/cml-abr`
 - `@svta/cml-cmcd`
 - `@svta/cml-cmsd`
 - `@svta/cml-content-steering`
@@ -34,6 +35,8 @@ Install one of the libraries with npm:
 npm i @svta/cml-cmcd
 ```
 
+The type declarations need TypeScript 5.7 or later.
+
 ## Usage
 
 ```typescript
@@ -54,7 +57,17 @@ console.log(cmcdUrl);
 
 ## Documentation
 
-Read the [API documentation](https://streaming-video-technology-alliance.github.io/common-media-library/).
+Read the [API documentation](https://cml.svta.org/).
+
+## Coding agents
+
+The repository ships a skill that tells a coding agent which package covers a media playback task. Install the skill in a player project:
+
+```bash
+npx skills add streaming-video-technology-alliance/common-media-library
+```
+
+Agents that read documentation from the web can begin with [llms.txt](https://cml.svta.org/llms.txt).
 
 ## Community
 

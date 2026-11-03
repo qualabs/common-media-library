@@ -41,8 +41,7 @@ async function readSource(source: string): Promise<string> {
 	let fs: typeof import('node:fs/promises')
 	try {
 		fs = await import(/* webpackIgnore: true */ /* @vite-ignore */ 'node:fs/promises')
-	}
-	catch {
+	} catch {
 		throw new Error('local paths require Node')
 	}
 	return fs.readFile(source, 'utf8')
@@ -53,8 +52,7 @@ function readPemCertificates(text: string): ParsedCertificate[] {
 		let cert: ParsedCertificate | null = null
 		try {
 			cert = parseCertificate(decodeBase64(match[1].replace(WHITESPACE_PATTERN, '')))
-		}
-		catch {
+		} catch {
 			cert = null
 		}
 		if (!cert) throw new Error(`certificate ${i + 1} does not parse`)
@@ -124,9 +122,13 @@ async function loadField(field: TrustField, source: string, parsed: ParsedSource
  */
 export async function createTrustPolicy(options: TrustPolicyOptions = {}): Promise<TrustPolicy> {
 	const parsed: ParsedSources = {}
-	const fields = (['trustAnchors', 'allowedList', 'trustConfig'] as const).filter(field => options[field] !== undefined)
+	const fields = (['trustAnchors', 'allowedList', 'trustConfig'] as const).filter(
+		field => options[field] !== undefined,
+	)
 
-	const results = await Promise.allSettled(fields.map(field => loadField(field, options[field] as string, parsed)))
+	const results = await Promise.allSettled(
+		fields.map(field => loadField(field, options[field] as string, parsed)),
+	)
 
 	const loadErrors: string[] = []
 	results.forEach((result, i) => {

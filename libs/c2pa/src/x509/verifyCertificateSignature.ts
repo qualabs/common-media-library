@@ -10,7 +10,14 @@ import {
 	RSA_PSS_ALGORITHM,
 } from '../cose/constants.ts'
 import { derToRawEcdsaSignature } from '../cose/verifyCoseSign1.ts'
-import { ASN1_TAG_INTEGER, ASN1_TAG_OBJECT_IDENTIFIER, ASN1_TAG_SEQUENCE, decodeOid, readElement, readUnsigned } from './asn1.ts'
+import {
+	ASN1_TAG_INTEGER,
+	ASN1_TAG_OBJECT_IDENTIFIER,
+	ASN1_TAG_SEQUENCE,
+	decodeOid,
+	readElement,
+	readUnsigned,
+} from './asn1.ts'
 import { normalizeRsaPssSpki } from './normalizeRsaPssSpki.ts'
 import { OID_RSASSA_PSS, type ParsedCertificate } from './parseCertificate.ts'
 
@@ -37,7 +44,11 @@ const DIGEST_HASHES: Readonly<Record<string, string>> = {
 	'2.16.840.1.101.3.4.2.3': HASH_SHA512,
 }
 
-const CURVE_COMPONENT_BYTES: Readonly<Record<string, number>> = { [CURVE_P256]: 32, [CURVE_P384]: 48, [CURVE_P521]: 66 }
+const CURVE_COMPONENT_BYTES: Readonly<Record<string, number>> = {
+	[CURVE_P256]: 32,
+	[CURVE_P384]: 48,
+	[CURVE_P521]: 66,
+}
 
 const OID_ED25519 = '1.3.101.112'
 
@@ -60,7 +71,8 @@ function readPssParams(params: Uint8Array | null): { hash: string; saltLength: n
 		const inner = readElement(field.value, 0)
 		if (field.tag === PSS_HASH_TAG && inner?.tag === ASN1_TAG_SEQUENCE) {
 			const oid = readElement(inner.value, 0)
-			if (oid?.tag === ASN1_TAG_OBJECT_IDENTIFIER) hash = DIGEST_HASHES[decodeOid(oid.value)] ?? null
+			if (oid?.tag === ASN1_TAG_OBJECT_IDENTIFIER)
+				hash = DIGEST_HASHES[decodeOid(oid.value)] ?? null
 		}
 		if (field.tag === PSS_SALT_LENGTH_TAG && inner?.tag === ASN1_TAG_INTEGER) {
 			saltLength = readUnsigned(inner.value)
@@ -70,7 +82,10 @@ function readPssParams(params: Uint8Array | null): { hash: string; saltLength: n
 	return hash ? { hash, saltLength } : null
 }
 
-function resolveVerifyParams(child: ParsedCertificate, parent: ParsedCertificate): VerifyParams | null {
+function resolveVerifyParams(
+	child: ParsedCertificate,
+	parent: ParsedCertificate,
+): VerifyParams | null {
 	const parentSpki = parent.spki
 	const alg = child.signatureAlgorithm
 	const signature = child.signatureValue
@@ -132,14 +147,27 @@ function resolveVerifyParams(child: ParsedCertificate, parent: ParsedCertificate
  *
  * @internal
  */
-export async function verifyCertificateSignature(child: ParsedCertificate, parent: ParsedCertificate): Promise<boolean> {
+export async function verifyCertificateSignature(
+	child: ParsedCertificate,
+	parent: ParsedCertificate,
+): Promise<boolean> {
 	try {
 		const params = resolveVerifyParams(child, parent)
 		if (!params) return false
-		const key = await crypto.subtle.importKey('spki', params.spki as Uint8Array<ArrayBuffer>, params.importAlgorithm, false, ['verify'])
-		return await crypto.subtle.verify(params.verifyAlgorithm, key, params.signature as Uint8Array<ArrayBuffer>, child.tbsCertificate as Uint8Array<ArrayBuffer>)
-	}
-	catch {
+		const key = await crypto.subtle.importKey(
+			'spki',
+			params.spki as Uint8Array<ArrayBuffer>,
+			params.importAlgorithm,
+			false,
+			['verify'],
+		)
+		return await crypto.subtle.verify(
+			params.verifyAlgorithm,
+			key,
+			params.signature as Uint8Array<ArrayBuffer>,
+			child.tbsCertificate as Uint8Array<ArrayBuffer>,
+		)
+	} catch {
 		return false
 	}
 }

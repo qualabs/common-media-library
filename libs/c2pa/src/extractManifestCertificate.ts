@@ -23,7 +23,9 @@ function readX5chain(header: CoseHeaderRecord): unknown {
  *
  * @internal
  */
-export function extractCertificateChainFromSignatureBytes(signatureBytes: Uint8Array): Uint8Array[] {
+export function extractCertificateChainFromSignatureBytes(
+	signatureBytes: Uint8Array,
+): Uint8Array[] {
 	try {
 		const cose = decodeCoseSign1(signatureBytes)
 		const x5chain = readX5chain(cose.protectedHeader) ?? readX5chain(cose.unprotectedHeader)
@@ -40,7 +42,9 @@ export function extractCertificateChainFromSignatureBytes(signatureBytes: Uint8A
  *
  * @internal
  */
-export function extractCertificateFromSignatureBytes(signatureBytes: Uint8Array): Uint8Array | null {
+export function extractCertificateFromSignatureBytes(
+	signatureBytes: Uint8Array,
+): Uint8Array | null {
 	return extractCertificateChainFromSignatureBytes(signatureBytes)[0] ?? null
 }
 
@@ -83,7 +87,7 @@ export function extractManifestCertificate(mp4Bytes: Uint8Array): Uint8Array | n
 		const uuidBox = findC2paUuidBox(boxes)
 		if (!uuidBox) return null
 
-		const rawPayload = uuidBox.view.readData(uuidBox.view.bytesRemaining) as Uint8Array
+		const rawPayload = uuidBox.view.readData(uuidBox.view.bytesRemaining)
 		const jumbfPayload = stripJumbfUuidPrefix(rawPayload)
 		if (!jumbfPayload) return null
 		const signatureBytes = findSignatureContentBytes(parseJumbfBoxes(jumbfPayload))

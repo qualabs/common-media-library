@@ -9,7 +9,7 @@ import {
 	type ValidatedSessionKey,
 } from '@svta/cml-c2pa'
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
-import { afterEach, before, describe, it, mock } from 'node:test'
+import { afterEach, beforeAll as before, describe, it, vi } from 'vite-plus/test'
 import { computeBmffHash } from '../../src/bmff/computeBmffHash.ts'
 import {
 	buildInitMediaBoxes,
@@ -24,10 +24,10 @@ import {
 import { createTestSigner } from '../testSigner.ts'
 import { hashCertificate } from '../../src/trust/evaluateCertificateTrust.ts'
 import { loadDer, pem, PKI_PATH } from './trustFixtures.ts'
+import { buildVsiSegment } from '../vsi/vsiTestUtils.ts'
 import {
 	buildManifestBoxSegment,
 	buildVsiInitSegment,
-	buildVsiSegment,
 	createFixtureSigner,
 	type VsiStream,
 } from './trustStreams.ts'
@@ -59,7 +59,9 @@ const SCENARIOS: readonly Scenario[] = [
 		name: 'degraded by URL',
 		isTrusted: false,
 		policy: async () => {
-			mock.method(globalThis, 'fetch', async () => new Response('', { status: 503 }))
+			vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+				Promise.resolve(new Response('', { status: 503 })),
+			)
 			return createTrustPolicy({
 				trustAnchors: pem('root-ec'),
 				allowedList: 'https://example.com/allowed.txt',
@@ -73,7 +75,8 @@ const SCENARIOS: readonly Scenario[] = [
 	},
 ]
 
-const SIGNATURE_LABEL = new TextEncoder().encode('c2pa.signature')
+// The JUMBF label of the signature box ends with a null byte. The claim `signature` URI does not.
+const SIGNATURE_LABEL = new TextEncoder().encode('c2pa.signature\0')
 const CBOR_BOX_TYPE = new TextEncoder().encode('cbor')
 
 function indexOfBytes(bytes: Uint8Array, pattern: Uint8Array, from = 0): number {
@@ -146,13 +149,13 @@ describe('trust across validation paths', () => {
 
 	before(async () => {
 		signer = await createFixtureSigner()
-		vsi = await buildVsiInitSegment(signer, signer.chain[0])
-		vsiSegment = await buildVsiSegment(vsi, 1, 5)
+		vsi = await buildVsiInitSegment(signer)
+		vsiSegment = await buildVsiSegment(vsi.sessionKey, 1)
 		merkle = await buildMerkleStream(signer)
 		manifestBoxSegment = await buildManifestBoxSegment(signer, 1)
 	})
 
-	afterEach(() => mock.restoreAll())
+	afterEach(() => vi.restoreAllMocks())
 
 	// #region example
 	it('reports a trusted signer on a VSI stream', async () => {
@@ -284,7 +287,7 @@ describe('trust across validation paths', () => {
 		const trustPolicy = await createTrustPolicy({ trustAnchors: pem('root-ec') })
 		const init = await validateC2paInitSegment(vsi.init, { trustPolicy })
 		const tampered = vsiSegment.slice()
-		tampered[12] ^= 0xff
+		tampered[tampered.length - 1] ^= 0xff
 
 		const segment = await validateC2paSegment(tampered, init.sessionKeys)
 
@@ -312,7 +315,7 @@ describe('trust across validation paths', () => {
 
 	it('leaves isTrusted absent when no session key matches the segment', async () => {
 		const trustPolicy = await createTrustPolicy({ trustAnchors: pem('root-ec') })
-		const other = await buildVsiInitSegment(signer, signer.chain[0])
+		const other = await buildVsiInitSegment(signer)
 		const init = await validateC2paInitSegment(other.init, { trustPolicy })
 
 		const segment = await validateC2paSegment(vsiSegment, init.sessionKeys)
@@ -331,7 +334,7 @@ describe('trust across validation paths', () => {
 		const jwk = await crypto.subtle.exportKey('jwk', impostor.publicKey)
 		const fabricated: ValidatedSessionKey = {
 			...init.sessionKeys[0],
-			jwk: { kty: 'EC', crv: 'P-256', x: jwk.x as string, y: jwk.y as string },
+			jwk: { kty: 'EC', crv: 'P-256', x: jwk.x as string, y: jwk.y },
 			isTrusted: true,
 		}
 
@@ -364,14 +367,14 @@ describe('trust across validation paths', () => {
 		const trustPolicy = await createTrustPolicy({ trustAnchors: pem('root-ec') })
 		const second = await buildManifestBoxSegment(signer, 2)
 		await validateC2paManifestBoxSegment(manifestBoxSegment, null, undefined, { trustPolicy })
-		const verify = mock.method(crypto.subtle, 'verify')
+		const verify = vi.spyOn(crypto.subtle, 'verify')
 
 		await validateC2paManifestBoxSegment(second, null)
-		const withoutPolicy = verify.mock.callCount()
+		const withoutPolicy = verify.mock.calls.length
 		const validated = await validateC2paManifestBoxSegment(second, null, undefined, { trustPolicy })
 
 		strictEqual(validated.result.isTrusted, true)
-		strictEqual(verify.mock.callCount() - withoutPolicy, withoutPolicy)
+		strictEqual(verify.mock.calls.length - withoutPolicy, withoutPolicy)
 	})
 
 	it('reports an untrusted init without certificate as not trusted', async () => {

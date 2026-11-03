@@ -1,14 +1,16 @@
 import { createTrustPolicy } from '@svta/cml-c2pa'
 import { deepStrictEqual, match, ok, strictEqual, throws } from 'node:assert'
-import { afterEach, describe, it, mock } from 'node:test'
+import { afterEach, describe, it, vi } from 'vite-plus/test'
 import { pem, PKI_PATH } from './trustFixtures.ts'
 
 function stubFetch(status: number, body: string = ''): void {
-	mock.method(globalThis, 'fetch', async () => new Response(body, { status }))
+	vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+		Promise.resolve(new Response(body, { status })),
+	)
 }
 
 describe('createTrustPolicy', () => {
-	afterEach(() => mock.restoreAll())
+	afterEach(() => vi.restoreAllMocks())
 
 	// #region example
 	it('creates a policy from inline PEM trust anchors', async () => {
@@ -38,9 +40,7 @@ describe('createTrustPolicy', () => {
 	})
 
 	it('reports a URL that cannot be fetched', async () => {
-		mock.method(globalThis, 'fetch', async () => {
-			throw new TypeError('fetch failed')
-		})
+		vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('fetch failed'))
 		const policy = await createTrustPolicy({ allowedList: 'http://example.com/allowed.txt' })
 		match(policy.loadErrors[0], /^allowedList: .*fetch failed/)
 	})

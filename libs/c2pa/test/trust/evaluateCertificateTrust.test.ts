@@ -1,5 +1,5 @@
 import { strictEqual } from 'node:assert'
-import { afterEach, describe, it, mock } from 'node:test'
+import { afterEach, describe, it, vi } from 'vite-plus/test'
 import { C2paStatusCode } from '../../src/C2paStatusCode.ts'
 import { createTrustPolicy } from '../../src/trust/createTrustPolicy.ts'
 import { evaluateCertificateTrust } from '../../src/trust/evaluateCertificateTrust.ts'
@@ -19,7 +19,7 @@ const INVALID = C2paStatusCode.SIGNING_CREDENTIAL_INVALID
 const UNTRUSTED = C2paStatusCode.SIGNING_CREDENTIAL_UNTRUSTED
 
 describe('evaluateCertificateTrust', () => {
-	afterEach(() => mock.restoreAll())
+	afterEach(() => vi.restoreAllMocks())
 
 	// #region example
 	it('trusts a leaf that chains to a trust anchor', async () => {
@@ -287,41 +287,41 @@ describe('evaluateCertificateTrust', () => {
 
 	it('verifies each chain once per policy', async () => {
 		const policy = await anchors('root-ec')
-		const verify = mock.method(crypto.subtle, 'verify')
+		const verify = vi.spyOn(crypto.subtle, 'verify')
 
 		strictEqual(
 			await evaluateCertificateTrust(policy, chain('leaf-ec', 'intermediate-ec')),
 			TRUSTED,
 		)
-		const firstCalls = verify.mock.callCount()
+		const firstCalls = verify.mock.calls.length
 		strictEqual(firstCalls > 0, true)
 
 		strictEqual(
 			await evaluateCertificateTrust(policy, chain('leaf-ec', 'intermediate-ec')),
 			TRUSTED,
 		)
-		strictEqual(verify.mock.callCount(), firstCalls)
+		strictEqual(verify.mock.calls.length, firstCalls)
 	})
 
 	it('checks the validity period of a cached chain at every call', async () => {
 		const policy = await anchors('root-ec')
-		mock.timers.enable({ apis: ['Date'], now: Date.UTC(2024, 0, 1) })
+		vi.useFakeTimers({ toFake: ['Date'], now: Date.UTC(2024, 0, 1) })
 
 		strictEqual(
 			await evaluateCertificateTrust(policy, chain('leaf-ec', 'intermediate-ec')),
 			UNTRUSTED,
 		)
-		mock.timers.setTime(Date.UTC(2026, 0, 1))
+		vi.setSystemTime(Date.UTC(2026, 0, 1))
 		strictEqual(
 			await evaluateCertificateTrust(policy, chain('leaf-ec', 'intermediate-ec')),
 			TRUSTED,
 		)
-		mock.timers.setTime(Date.UTC(2100, 0, 1))
+		vi.setSystemTime(Date.UTC(2100, 0, 1))
 		strictEqual(
 			await evaluateCertificateTrust(policy, chain('leaf-ec', 'intermediate-ec')),
 			UNTRUSTED,
 		)
 
-		mock.timers.reset()
+		vi.useRealTimers()
 	})
 })

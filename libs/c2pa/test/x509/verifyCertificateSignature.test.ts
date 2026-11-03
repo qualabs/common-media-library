@@ -1,5 +1,5 @@
 import { strictEqual } from 'node:assert'
-import { describe, it } from 'node:test'
+import { describe, it } from 'vite-plus/test'
 import { parseCertificate, type ParsedCertificate } from '../../src/x509/parseCertificate.ts'
 import { verifyCertificateSignature } from '../../src/x509/verifyCertificateSignature.ts'
 import { loadDer } from '../trust/trustFixtures.ts'

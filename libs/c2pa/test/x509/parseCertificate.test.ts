@@ -1,5 +1,5 @@
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
-import { describe, it } from 'node:test'
+import { describe, it } from 'vite-plus/test'
 import { parseCertificate } from '../../src/x509/parseCertificate.ts'
 import { extractCertificateSpki } from '../../src/x509/extractCertificateSpki.ts'
 import { loadDer } from '../trust/trustFixtures.ts'

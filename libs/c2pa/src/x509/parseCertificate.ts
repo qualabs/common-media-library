@@ -52,23 +52,19 @@ const KEY_USAGE_KEY_CERT_SIGN_MASK = 0x04
 const ISSUER_UNIQUE_ID_TAG = 0x81
 const SUBJECT_UNIQUE_ID_TAG = 0x82
 
-// Extensions that a critical flag does not make unacceptable. The same set as c2pa-rs.
+// Extensions that a critical flag does not make unacceptable. c2pa-rs also accepts the name
+// constraints and policy extensions. No code here processes them, so a critical one fails (RFC 5280 §4.2).
 const KNOWN_EXTENSIONS: ReadonlySet<string> = /* @__PURE__ */ new Set([
 	OID_BASIC_CONSTRAINTS,
 	OID_KEY_USAGE,
 	OID_EXTENDED_KEY_USAGE,
 	OID_AUTHORITY_KEY_IDENTIFIER,
-	'2.5.29.14', // subjectKeyIdentifier
+	OID_SUBJECT_KEY_IDENTIFIER,
 	'2.5.29.17', // subjectAltName
 	'2.5.29.20', // cRLNumber
 	'2.5.29.21', // reasonCode
 	'2.5.29.24', // invalidityDate
-	'2.5.29.30', // nameConstraints
 	'2.5.29.31', // cRLDistributionPoints
-	'2.5.29.32', // certificatePolicies
-	'2.5.29.33', // policyMappings
-	'2.5.29.36', // policyConstraints
-	'2.5.29.54', // inhibitAnyPolicy
 	'1.3.6.1.5.5.7.1.1', // authorityInfoAccess
 	'2.16.840.1.113730.1.1', // netscapeCertType
 ])

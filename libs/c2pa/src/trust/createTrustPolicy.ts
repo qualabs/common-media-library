@@ -1,6 +1,6 @@
 import { decodeBase64 } from '@svta/cml-utils'
 import { parseCertificate, type ParsedCertificate } from '../x509/parseCertificate.ts'
-import { bindTrustPolicyState, hashCertificate } from './evaluateCertificateTrust.ts'
+import { createChainEvaluator, hashCertificate } from './evaluateCertificateTrust.ts'
 import type { TrustPolicy, TrustPolicyOptions } from './TrustPolicy.ts'
 
 const DEFAULT_EKU_OIDS: readonly string[] = [
@@ -9,144 +9,120 @@ const DEFAULT_EKU_OIDS: readonly string[] = [
 	'1.3.6.1.5.5.7.3.36',
 ]
 
-const PEM_CERTIFICATE_PATTERN = /-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----/g
-const INLINE_PATTERN = /-----BEGIN|[\r\n]/
-const URL_PATTERN = /^https?:\/\//i
+const PEM_CERTIFICATE_PATTERN =
+	/-----BEGIN CERTIFICATE-----([A-Za-z0-9+/=\s]*)-----END CERTIFICATE-----/g
 const LINE_BREAK_PATTERN = /\r?\n/
+const NOT_LINE_BREAK_PATTERN = /[^\n]/g
 const WHITESPACE_PATTERN = /\s/g
+const HASH_COMMENT_PATTERN = /#.*$/
 const CERT_HASH_PATTERN = /^[A-Za-z0-9+/]{43}=$/
 const OID_PATTERN = /^\d+(\.\d+)+$/
+const PEM_BEGIN_MARKER = '-----BEGIN CERTIFICATE-----'
+const SOURCE_HINT = 'Pass the text of the source, not a URL or a file path.'
 
-type TrustField = keyof TrustPolicyOptions
-
-type ParsedSources = {
-	anchors?: ParsedCertificate[]
-	allowedHashes?: Set<string>
-	ekuOids?: Set<string>
-}
-
-function describeSource(source: string): string {
-	return INLINE_PATTERN.test(source) ? 'inline content' : `"${source}"`
-}
-
-async function readSource(source: string): Promise<string> {
-	if (INLINE_PATTERN.test(source)) return source
-
-	if (URL_PATTERN.test(source)) {
-		const response = await fetch(source)
-		if (!response.ok) throw new Error(`HTTP ${response.status}`)
-		return response.text()
-	}
-
-	let fs: typeof import('node:fs/promises')
-	try {
-		fs = await import(/* webpackIgnore: true */ /* @vite-ignore */ 'node:fs/promises')
-	} catch {
-		throw new Error('local paths require Node')
-	}
-	return fs.readFile(source, 'utf8')
-}
-
-function readPemCertificates(text: string): ParsedCertificate[] {
-	return [...text.matchAll(PEM_CERTIFICATE_PATTERN)].map((match, i) => {
+function readPemCertificates(field: string, text: string, errors: string[]): ParsedCertificate[] {
+	const certs: ParsedCertificate[] = []
+	let index = 0
+	for (const match of text.matchAll(PEM_CERTIFICATE_PATTERN)) {
+		index++
 		let cert: ParsedCertificate | null = null
 		try {
 			cert = parseCertificate(decodeBase64(match[1].replace(WHITESPACE_PATTERN, '')))
 		} catch {
 			cert = null
 		}
-		if (!cert) throw new Error(`certificate ${i + 1} does not parse`)
-		return cert
-	})
+		if (cert) certs.push(cert)
+		else errors.push(`${field}: PEM certificate ${index} does not parse`)
+	}
+	if (text.split(PEM_BEGIN_MARKER).length - 1 > index)
+		errors.push(
+			`${field}: a PEM certificate block has no END line or has characters that are not base64`,
+		)
+	return certs
 }
 
-async function parseAllowedList(text: string): Promise<Set<string>> {
+// Returns the lines that are not PEM blocks, blank lines, or comments, with their line numbers.
+function readEntryLines(text: string): { readonly line: number; readonly entry: string }[] {
+	const withoutPem = text.replace(PEM_CERTIFICATE_PATTERN, block =>
+		block.replace(NOT_LINE_BREAK_PATTERN, ''),
+	)
+	return withoutPem
+		.split(LINE_BREAK_PATTERN)
+		.map((raw, i) => ({ line: i + 1, entry: raw.replace(HASH_COMMENT_PATTERN, '').trim() }))
+		.filter(({ entry }) => entry !== '' && !entry.startsWith('//'))
+}
+
+async function parseAllowedList(text: string, errors: string[]): Promise<Set<string>> {
 	const hashes = new Set<string>()
-	let insidePem = false
-	for (const rawLine of text.split(LINE_BREAK_PATTERN)) {
-		const line = rawLine.trim()
-		if (line.includes('-----BEGIN')) insidePem = true
-		if (!insidePem && CERT_HASH_PATTERN.test(line)) hashes.add(line)
-		if (line.includes('-----END')) insidePem = false
+	for (const { line, entry } of readEntryLines(text)) {
+		if (CERT_HASH_PATTERN.test(entry)) hashes.add(entry)
+		else errors.push(`allowedList: line ${line} is not a PEM certificate or a base64 SHA-256 hash`)
 	}
-	for (const cert of readPemCertificates(text)) hashes.add(await hashCertificate(cert.der))
+	for (const cert of readPemCertificates('allowedList', text, errors))
+		hashes.add(await hashCertificate(cert.der))
 	return hashes
 }
 
-function parseTrustConfig(text: string): Set<string> {
+function parseTrustConfig(text: string, errors: string[]): Set<string> {
 	const oids = new Set<string>()
-	for (const rawLine of text.split(LINE_BREAK_PATTERN)) {
-		const line = rawLine.split('#')[0].trim()
-		if (OID_PATTERN.test(line)) oids.add(line)
+	for (const { line, entry } of readEntryLines(text)) {
+		if (OID_PATTERN.test(entry)) oids.add(entry)
+		else errors.push(`trustConfig: line ${line} is not an OID`)
 	}
 	return oids
 }
 
-async function loadField(field: TrustField, source: string, parsed: ParsedSources): Promise<void> {
-	const text = await readSource(source)
-	let count: number
-	switch (field) {
-		case 'trustAnchors':
-			parsed.anchors = readPemCertificates(text)
-			count = parsed.anchors.length
-			break
-		case 'allowedList':
-			parsed.allowedHashes = await parseAllowedList(text)
-			count = parsed.allowedHashes.size
-			break
-		case 'trustConfig':
-			parsed.ekuOids = parseTrustConfig(text)
-			count = parsed.ekuOids.size
-			break
-	}
-	if (count === 0) throw new Error('no usable entries')
-}
-
 /**
- * Loads and parses trust sources once, for use in every validation call.
+ * Parses trust sources once, for use in every validation call.
  *
- * The function never rejects because of a trust source. If a source fails to load or has no
- * usable entries, the returned policy lists the failure in `loadErrors` and trusts no certificate.
- * Every result that such a policy evaluates is not valid, with `signingCredential.untrusted`.
+ * Every source is text: PEM certificates for `trustAnchors`, PEM certificates or base64 SHA-256
+ * hashes for `allowedList`, and OIDs for `trustConfig`. Lines that start with `#` or `//` are
+ * comments. The policy accepts the EKUs of C2PA 2.4 §14.4.1 and the EKUs of `trustConfig`.
+ * The default EKUs are `c2pa-kp-claimSigning`, `id-kp-emailProtection`, and `id-kp-documentSigning`.
  *
- * Without `trustConfig`, the policy accepts the EKUs of C2PA 2.4 §14.4.1:
- * `c2pa-kp-claimSigning`, `id-kp-emailProtection`, and `id-kp-documentSigning`.
- *
- * @param options - Trust sources. Each one is inline content, a URL, or a local file path.
+ * @param options - Trust sources and time settings
  * @returns An immutable trust policy
+ * @throws If neither `trustAnchors` nor `allowedList` is present, or if a source has an entry that does not parse or has no entries
  *
  * @example
  * {@includeCode ../../test/trust/createTrustPolicy.test.ts#example}
  *
  * @public
  */
-export async function createTrustPolicy(options: TrustPolicyOptions = {}): Promise<TrustPolicy> {
-	const parsed: ParsedSources = {}
-	const fields = (['trustAnchors', 'allowedList', 'trustConfig'] as const).filter(
-		field => options[field] !== undefined,
-	)
+export async function createTrustPolicy(options: TrustPolicyOptions): Promise<TrustPolicy> {
+	const { trustAnchors, allowedList, trustConfig } = options
+	if (trustAnchors === undefined && allowedList === undefined)
+		throw new Error('createTrustPolicy: options need trustAnchors, allowedList, or both')
 
-	const results = await Promise.allSettled(
-		fields.map(field => loadField(field, options[field] as string, parsed)),
-	)
-
-	const loadErrors: string[] = []
-	results.forEach((result, i) => {
-		if (result.status === 'rejected') {
-			const field = fields[i]
-			const reason = result.reason instanceof Error ? result.reason.message : String(result.reason)
-			loadErrors.push(`${field}: cannot use ${describeSource(options[field] as string)}: ${reason}`)
-		}
-	})
-
-	const policy: TrustPolicy = Object.freeze({ loadErrors: Object.freeze(loadErrors) })
-	if (loadErrors.length === 0) {
-		bindTrustPolicyState(policy, {
-			anchors: parsed.anchors ?? [],
-			allowedHashes: parsed.allowedHashes ?? new Set(),
-			ekuOids: parsed.ekuOids ?? new Set(DEFAULT_EKU_OIDS),
-			cache: new Map(),
-		})
+	const errors: string[] = []
+	let anchors: ParsedCertificate[] = []
+	if (trustAnchors !== undefined) {
+		anchors = readPemCertificates('trustAnchors', trustAnchors, errors)
+		if (anchors.length === 0 && errors.length === 0)
+			errors.push(`trustAnchors: no PEM certificate found. ${SOURCE_HINT}`)
 	}
-	return policy
+
+	let allowedHashes = new Set<string>()
+	if (allowedList !== undefined) {
+		const before = errors.length
+		allowedHashes = await parseAllowedList(allowedList, errors)
+		if (allowedHashes.size === 0 && errors.length === before)
+			errors.push(`allowedList: no PEM certificate or hash found. ${SOURCE_HINT}`)
+	}
+
+	const ekuOids = new Set(DEFAULT_EKU_OIDS)
+	if (trustConfig !== undefined)
+		for (const oid of parseTrustConfig(trustConfig, errors)) ekuOids.add(oid)
+
+	if (errors.length > 0) throw new Error(`createTrustPolicy: ${errors.join('. ')}`)
+
+	return Object.freeze({
+		evaluate: createChainEvaluator({
+			anchors,
+			allowedHashes,
+			ekuOids,
+			validationTime: options.validationTime ?? (() => new Date()),
+			clockTolerance: options.clockTolerance ?? 0,
+		}),
+	})
 }

@@ -1,102 +1,97 @@
-import { createTrustPolicy } from '@svta/cml-c2pa'
-import { deepStrictEqual, match, ok, strictEqual, throws } from 'node:assert'
-import { afterEach, describe, it, vi } from 'vite-plus/test'
-import { pem, PKI_PATH } from './trustFixtures.ts'
+import { C2paStatusCode, createTrustPolicy } from '@svta/cml-c2pa'
+import { ok, rejects, strictEqual } from 'node:assert'
+import { describe, it } from 'vite-plus/test'
+import { hashCertificate } from '../../src/trust/evaluateCertificateTrust.ts'
+import { loadDer, pem } from './trustFixtures.ts'
 
-function stubFetch(status: number, body: string = ''): void {
-	vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
-		Promise.resolve(new Response(body, { status })),
-	)
-}
+const CLAIM_SIGNING_LEAF = ['leaf-ec-claim-signing', 'intermediate-ec']
 
 describe('createTrustPolicy', () => {
-	afterEach(() => vi.restoreAllMocks())
-
 	// #region example
-	it('creates a policy from inline PEM trust anchors', async () => {
+	it('creates a policy from PEM trust anchors', async () => {
 		const trustAnchors = pem('root-ec')
 		const policy = await createTrustPolicy({ trustAnchors })
 
-		deepStrictEqual(policy.loadErrors, [])
+		strictEqual(await policy.evaluate([loadDer('leaf-ec'), loadDer('intermediate-ec')]), null)
 	})
 	// #endregion example
 
-	it('creates a policy without any source', async () => {
-		deepStrictEqual((await createTrustPolicy()).loadErrors, [])
-		deepStrictEqual((await createTrustPolicy({})).loadErrors, [])
+	it('rejects options without trustAnchors and allowedList', async () => {
+		await rejects(createTrustPolicy({}), /options need trustAnchors, allowedList, or both/)
+		await rejects(createTrustPolicy({ trustConfig: '1.2.3.4' }), /options need trustAnchors/)
 	})
 
-	it('loads a source from a URL', async () => {
-		stubFetch(200, pem('root-ec'))
-		const policy = await createTrustPolicy({ trustAnchors: 'https://example.com/anchors.pem' })
-		deepStrictEqual(policy.loadErrors, [])
+	it('rejects a URL or a path instead of content', async () => {
+		await rejects(
+			createTrustPolicy({ trustAnchors: 'https://example.com/anchors.pem' }),
+			/trustAnchors: no PEM certificate found\. Pass the text of the source/,
+		)
+		await rejects(
+			createTrustPolicy({ allowedList: '/etc/c2pa/allowed.pem' }),
+			/allowedList: line 1 is not a PEM certificate or a base64 SHA-256 hash/,
+		)
 	})
 
-	it('reports a URL that answers with an error status', async () => {
-		stubFetch(404)
-		const policy = await createTrustPolicy({ trustAnchors: 'https://example.com/anchors.pem' })
-		strictEqual(policy.loadErrors.length, 1)
-		match(policy.loadErrors[0], /^trustAnchors: .*"https:\/\/example\.com\/anchors\.pem".*HTTP 404/)
+	it('rejects a source without entries', async () => {
+		await rejects(
+			createTrustPolicy({ allowedList: '# comment only\n' }),
+			/allowedList: no PEM certificate or hash found/,
+		)
 	})
 
-	it('reports a URL that cannot be fetched', async () => {
-		vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('fetch failed'))
-		const policy = await createTrustPolicy({ allowedList: 'http://example.com/allowed.txt' })
-		match(policy.loadErrors[0], /^allowedList: .*fetch failed/)
-	})
-
-	it('loads a source from a local path', async () => {
-		const policy = await createTrustPolicy({
-			trustAnchors: PKI_PATH,
-			allowedList: PKI_PATH,
-		})
-		deepStrictEqual(policy.loadErrors, [])
-	})
-
-	it('reports a missing local file', async () => {
-		const policy = await createTrustPolicy({ trustConfig: `${PKI_PATH}.missing` })
-		match(policy.loadErrors[0], /^trustConfig: .*pki\.pem\.missing.*ENOENT/)
-	})
-
-	it('reports a source without usable entries', async () => {
-		const policy = await createTrustPolicy({
-			trustAnchors: 'no certificates here\n',
-			allowedList: 'not-a-hash\n',
-			trustConfig: '# comment only\n',
-		})
-		deepStrictEqual(policy.loadErrors, [
-			'trustAnchors: cannot use inline content: no usable entries',
-			'allowedList: cannot use inline content: no usable entries',
-			'trustConfig: cannot use inline content: no usable entries',
-		])
-	})
-
-	it('reports a certificate block that does not parse', async () => {
-		const badBase64 = '-----BEGIN CERTIFICATE-----\n!!!\n-----END CERTIFICATE-----\n'
+	it('lists every failure in one error', async () => {
 		const notCertificate = '-----BEGIN CERTIFICATE-----\nMAA=\n-----END CERTIFICATE-----\n'
-		const policy = await createTrustPolicy({
-			trustAnchors: `${pem('root-ec')}\n${badBase64}`,
-			allowedList: `${pem('leaf-ec')}\n${notCertificate}`,
-		})
-		deepStrictEqual(policy.loadErrors, [
-			'trustAnchors: cannot use inline content: certificate 2 does not parse',
-			'allowedList: cannot use inline content: certificate 2 does not parse',
-		])
+		await rejects(
+			createTrustPolicy({
+				trustAnchors: `${pem('root-ec')}\n${notCertificate}`,
+				allowedList: `${pem('leaf-ec')}\nnot-a-hash\n`,
+				trustConfig: '1.3.6.1.4.1.99999.1\nnot.an.oid\n',
+			}),
+			{
+				message:
+					'createTrustPolicy: trustAnchors: PEM certificate 2 does not parse. ' +
+					`allowedList: line ${pem('leaf-ec').split('\n').length + 1} is not a PEM certificate or a base64 SHA-256 hash. ` +
+					'trustConfig: line 2 is not an OID',
+			},
+		)
 	})
 
-	it('reports only the failed source', async () => {
-		stubFetch(500)
+	it('rejects a PEM block that is not base64', async () => {
+		await rejects(
+			createTrustPolicy({
+				trustAnchors: `${pem('root-ec')}\n-----BEGIN CERTIFICATE-----\n!!!\n-----END CERTIFICATE-----\n`,
+			}),
+			/trustAnchors: a PEM certificate block has no END line/,
+		)
+	})
+
+	it('reads hashes with comments and CRLF line breaks', async () => {
+		const hash = await hashCertificate(loadDer('self-signed-leaf'))
+		const policy = await createTrustPolicy({
+			allowedList: `# Allowed signers\r\n// c2pa-rs comment\r\n${hash} # self-signed test leaf\r\n`,
+		})
+		strictEqual(await policy.evaluate([loadDer('self-signed-leaf')]), null)
+	})
+
+	it('adds trustConfig EKUs to the default EKUs', async () => {
 		const policy = await createTrustPolicy({
 			trustAnchors: pem('root-ec'),
-			allowedList: 'https://example.com/allowed.txt',
+			trustConfig: '// vendor EKU\n1.3.6.1.4.1.99999.1\n',
 		})
-		strictEqual(policy.loadErrors.length, 1)
-		match(policy.loadErrors[0], /^allowedList: /)
+		strictEqual(await policy.evaluate(CLAIM_SIGNING_LEAF.map(loadDer)), null)
+		strictEqual(await policy.evaluate([loadDer('leaf-ec'), loadDer('intermediate-ec')]), null)
+	})
+
+	it('does not trust a chain that fails, so a load error never reaches a validator', async () => {
+		const policy = await createTrustPolicy({ trustAnchors: pem('root-rsa') })
+		strictEqual(
+			await policy.evaluate(CLAIM_SIGNING_LEAF.map(loadDer)),
+			C2paStatusCode.SIGNING_CREDENTIAL_UNTRUSTED,
+		)
 	})
 
 	it('returns an immutable policy', async () => {
-		const policy = await createTrustPolicy({ trustConfig: 'not.an.oid\n' })
+		const policy = await createTrustPolicy({ trustAnchors: pem('root-ec') })
 		ok(Object.isFrozen(policy))
-		throws(() => (policy.loadErrors as string[]).push('x'))
 	})
 })

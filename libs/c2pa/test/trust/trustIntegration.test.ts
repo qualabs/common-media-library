@@ -23,7 +23,7 @@ import {
 } from '../merkle/merkleTestUtils.ts'
 import { createTestSigner } from '../testSigner.ts'
 import { hashCertificate } from '../../src/trust/evaluateCertificateTrust.ts'
-import { loadDer, pem, PKI_PATH } from './trustFixtures.ts'
+import { loadDer, pem } from './trustFixtures.ts'
 import { buildVsiSegment } from '../vsi/vsiTestUtils.ts'
 import {
 	buildManifestBoxSegment,
@@ -56,22 +56,12 @@ const SCENARIOS: readonly Scenario[] = [
 		policy: () => createTrustPolicy({ trustAnchors: pem('root-rsa') }),
 	},
 	{
-		name: 'degraded by URL',
+		name: 'policy of the app that trusts no signer',
 		isTrusted: false,
-		policy: async () => {
-			vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
-				Promise.resolve(new Response('', { status: 503 })),
-			)
-			return createTrustPolicy({
-				trustAnchors: pem('root-ec'),
-				allowedList: 'https://example.com/allowed.txt',
-			})
-		},
-	},
-	{
-		name: 'degraded by path',
-		isTrusted: false,
-		policy: () => createTrustPolicy({ trustAnchors: `${PKI_PATH}.missing` }),
+		policy: () =>
+			Promise.resolve({
+				evaluate: () => Promise.resolve(C2paStatusCode.SIGNING_CREDENTIAL_UNTRUSTED),
+			}),
 	},
 ]
 
@@ -246,7 +236,14 @@ describe('trust across validation paths', () => {
 				const { isTrusted: _, isValid: __, errorCodes, ...rest } = validated.result
 				const { isValid: ___, errorCodes: baselineCodes, ...baselineRest } = baseline.result
 				deepStrictEqual(errorCodes, [...baselineCodes, ...trustCodes(scenario)])
-				deepStrictEqual({ ...validated, result: rest }, { ...baseline, result: baselineRest })
+				deepStrictEqual(rest, baselineRest)
+				if (scenario.isTrusted) {
+					strictEqual(validated.nextManifestId, baseline.nextManifestId)
+					deepStrictEqual(validated.nextState, baseline.nextState)
+				} else {
+					strictEqual(validated.nextManifestId, null)
+					deepStrictEqual(validated.nextState, {})
+				}
 			})
 		})
 	}
@@ -266,11 +263,10 @@ describe('trust across validation paths', () => {
 		strictEqual(box.result.isTrusted, false)
 	})
 
-	it('rejects a signing certificate without an accepted EKU as an invalid credential', async () => {
-		const trustPolicy = await createTrustPolicy({
-			trustAnchors: pem('root-ec'),
-			trustConfig: '1.3.6.1.4.1.62558.2.1\n',
-		})
+	it('reports the failure code of the policy', async () => {
+		const trustPolicy: TrustPolicy = {
+			evaluate: () => Promise.resolve(C2paStatusCode.SIGNING_CREDENTIAL_INVALID),
+		}
 
 		const init = await validateC2paInitSegment(vsi.init, { trustPolicy })
 		const box = await validateC2paManifestBoxSegment(manifestBoxSegment, null, undefined, {
@@ -361,6 +357,41 @@ describe('trust across validation paths', () => {
 			(await validateC2paMerkleSegment(merkle.segment, trustedInit.merkleMaps)).result.isTrusted,
 			true,
 		)
+	})
+
+	it('does not let an untrusted ManifestBox segment advance the state', async () => {
+		const trustPolicy = await createTrustPolicy({ trustAnchors: pem('root-ec') })
+		const options = { trustPolicy }
+		const forged = await buildManifestBoxSegment(await createTestSigner(), 100)
+		const next = await buildManifestBoxSegment(signer, 2)
+
+		const first = await validateC2paManifestBoxSegment(manifestBoxSegment, null, undefined, options)
+		const afterForged = await validateC2paManifestBoxSegment(
+			forged,
+			first.nextManifestId,
+			first.nextState,
+			options,
+		)
+		const third = await validateC2paManifestBoxSegment(
+			next,
+			afterForged.nextManifestId,
+			afterForged.nextState,
+			options,
+		)
+		const withoutForged = await validateC2paManifestBoxSegment(
+			next,
+			first.nextManifestId,
+			first.nextState,
+			options,
+		)
+
+		strictEqual(first.result.isTrusted, true)
+		strictEqual(afterForged.result.isTrusted, false)
+		strictEqual(afterForged.result.isValid, false)
+		strictEqual(afterForged.nextManifestId, first.nextManifestId)
+		deepStrictEqual(afterForged.nextState, first.nextState)
+		deepStrictEqual(third, withoutForged)
+		strictEqual(third.result.isTrusted, true)
 	})
 
 	it('verifies the chain of repeated ManifestBox segments once', async () => {

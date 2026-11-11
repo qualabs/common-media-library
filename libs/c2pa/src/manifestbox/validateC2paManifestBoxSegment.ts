@@ -15,7 +15,7 @@ import { parseExclusions } from '../bmff/parseExclusions.ts'
 import type { BmffHashExclusion } from '../bmff/BmffHashExclusion.ts'
 import type { InternalManifestData } from '../claim/InternalManifestData.ts'
 import { validateManifestIntegrity } from '../claim/validateManifestIntegrity.ts'
-import { evaluateSignerTrust } from '../trust/evaluateCertificateTrust.ts'
+import { evaluateSignerTrust } from '../trust/evaluateSignerTrust.ts'
 import type {
 	ManifestBoxValidationOptions,
 	ManifestBoxValidationResult,
@@ -295,7 +295,7 @@ export async function validateC2paManifestBoxSegment(
 		errorCodes.push(LiveVideoStatusCode.SEGMENT_INVALID)
 	}
 
-	// The continuity check does not gate the advance.
+	// The continuity check does not gate the advance. A signer that the trust policy rejects does.
 	const authentic =
 		manifest !== null &&
 		liveVideo !== null &&
@@ -303,7 +303,8 @@ export async function validateC2paManifestBoxSegment(
 		integrity.codes.length === 0 &&
 		bmffHashMatches &&
 		!bmff.malformed &&
-		currentManifestId !== null
+		currentManifestId !== null &&
+		!trust?.failure
 	const advance = authentic && streamIdValid && sequenceNumberValid
 
 	return {

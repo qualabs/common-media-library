@@ -19,7 +19,8 @@ function readX5chain(header: CoseHeaderRecord): unknown {
  * Extracts the full `x5chain` (leaf first) from raw COSE_Sign1 signature bytes.
  *
  * Accepts the integer label 33 and the legacy string label `x5chain`. The integer label wins
- * when both are present.
+ * when both are present in one header bucket. An `x5chain` in both buckets makes the signature
+ * malformed (§14.5), so the function returns an empty chain.
  *
  * @internal
  */
@@ -28,7 +29,10 @@ export function extractCertificateChainFromSignatureBytes(
 ): Uint8Array[] {
 	try {
 		const cose = decodeCoseSign1(signatureBytes)
-		const x5chain = readX5chain(cose.protectedHeader) ?? readX5chain(cose.unprotectedHeader)
+		const protectedChain = readX5chain(cose.protectedHeader)
+		const unprotectedChain = readX5chain(cose.unprotectedHeader)
+		if (protectedChain !== undefined && unprotectedChain !== undefined) return []
+		const x5chain = protectedChain ?? unprotectedChain
 		const certs: unknown[] = Array.isArray(x5chain) ? x5chain : [x5chain]
 		const end = certs.findIndex(cert => !(cert instanceof Uint8Array))
 		return (end === -1 ? certs : certs.slice(0, end)) as Uint8Array[]

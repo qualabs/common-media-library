@@ -42,9 +42,12 @@ describe('extractCertificateChainFromSignatureBytes', () => {
 	const OTHER = new Uint8Array([0x30, 0x01, 0x03])
 	const COSE_SIGN1_TAG = 0xd2
 
-	function coseWithHeader(header: Map<number | string, unknown>): Uint8Array {
+	function coseWithHeader(
+		header: Map<number | string, unknown>,
+		unprotected = new Map<number | string, unknown>(),
+	): Uint8Array {
 		const protectedBytes = Uint8Array.from(CBOR.encode(header))
-		const coseSign1 = CBOR.encode([protectedBytes, new Map(), null, new Uint8Array(64)])
+		const coseSign1 = CBOR.encode([protectedBytes, unprotected, null, new Uint8Array(64)])
 		return Uint8Array.from([COSE_SIGN1_TAG, ...coseSign1])
 	}
 
@@ -67,6 +70,19 @@ describe('extractCertificateChainFromSignatureBytes', () => {
 			]),
 		)
 		deepStrictEqual(extractCertificateChainFromSignatureBytes(cose), [LEAF])
+	})
+
+	it('reads the chain from the unprotected header', () => {
+		const cose = coseWithHeader(new Map([[1, -7]]), new Map<number, unknown>([[33, [LEAF]]]))
+		deepStrictEqual(extractCertificateChainFromSignatureBytes(cose), [LEAF])
+	})
+
+	it('returns an empty chain when both header buckets carry an x5chain', () => {
+		const cose = coseWithHeader(
+			new Map<number, unknown>([[33, [LEAF]]]),
+			new Map<string, unknown>([['x5chain', [OTHER]]]),
+		)
+		deepStrictEqual(extractCertificateChainFromSignatureBytes(cose), [])
 	})
 
 	it('accepts a single certificate instead of an array', () => {

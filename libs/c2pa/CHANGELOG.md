@@ -10,9 +10,11 @@ and this project adheres to
 
 ### Added
 
-- `createTrustPolicy`: loads trust anchors, an allowed list, and accepted EKUs from inline content, a URL, or a local path. The file formats are the same as the c2pa-rs trust settings. A source that fails to load does not throw. The policy lists the failure in `loadErrors` and trusts no certificate. See [Signer Trust Validation](docs/trust-validation.md).
+- `createTrustPolicy`: parses trust anchors, an allowed list, and extra accepted EKUs from text in the formats of the c2pa-rs trust settings. The function rejects if a source has an entry that does not parse. `validationTime` and `clockTolerance` set the time for the validity checks. See [Signer Trust Validation](docs/trust-validation.md).
+- `TrustPolicy` and `TrustFailure` types. An app can pass its own `TrustPolicy` with an `evaluate` function.
 - `isTrusted` on `InitSegmentValidation`, `SegmentValidationResult`, `ManifestBoxValidationResult`, `MerkleSegmentValidation`, `ValidatedSessionKey`, and `MerkleMap`. The field is absent without a policy.
-- `C2paStatusCode.SIGNING_CREDENTIAL_UNTRUSTED` and `C2paStatusCode.SIGNING_CREDENTIAL_INVALID`. With a trust policy, a signer that the policy does not trust makes the result not valid, as C2PA 2.4 section 15.7 requires. A signing certificate that breaks the certificate profile of section 14.5.1.1 gives `signingCredential.invalid`. A policy with load errors trusts no signer.
+- `C2paStatusCode.SIGNING_CREDENTIAL_UNTRUSTED`, `SIGNING_CREDENTIAL_INVALID`, `CLAIM_SIGNATURE_OUTSIDE_VALIDITY`, and `ALGORITHM_UNSUPPORTED`. With a trust policy, a signer that the policy does not trust makes the result not valid, as C2PA 2.4 section 15.7 requires. A signing certificate that breaks the certificate profile of section 14.5.1.1 gives `signingCredential.invalid`.
+- A Manifest Box segment from a signer that the trust policy does not trust does not advance `nextManifestId` and `nextState`.
 - `isTrusted` is `false` when the claim signature does not verify.
 - `validateC2paInitSegment` accepts an `InitSegmentValidationOptions` argument with a `trustPolicy`.
 - `ManifestBoxValidationOptions.trustPolicy`.
@@ -21,8 +23,12 @@ and this project adheres to
 
 - Every code example in the guides now typechecks ([#565](https://github.com/streaming-video-technology-alliance/common-media-library/issues/565)).
 - The README no longer describes the peer dependencies. The website lists them from `package.json` on the package page.
-- `SegmentValidationResult.errorCodes` can also contain `C2paStatusCode` values.
-- The claim signature check also reads the certificate chain from the legacy `x5chain` string header label. The integer label 33 still wins when both labels are present.
+- `SegmentValidationResult.errorCodes` can also contain `C2paStatusCode` values. If your code assigns `errorCodes` to a `LiveVideoStatusCode[]` or uses an exhaustive `switch` on `LiveVideoStatusCode`, widen the type to `LiveVideoStatusCode | C2paStatusCode`. Without a trust policy, the array still contains only `LiveVideoStatusCode` values.
+- The claim signature check also reads the certificate chain from the legacy `x5chain` string header label. The integer label 33 still wins when both labels are present in one header bucket. An `x5chain` in both the protected and the unprotected header makes the claim signature fail with `claimSignature.mismatch`.
+
+### Fixed
+
+- The DER reader rejects lengths and OID encodings that DER does not allow. A certificate with a length that overflows 32 bits no longer makes the parser run until the heap is full.
 
 ## [1.7.0] - 2026-10-22
 

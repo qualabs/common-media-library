@@ -68,6 +68,8 @@ export const C2paStatusCode: {
     readonly CLAIM_HARD_BINDINGS_MISSING: "claim.hardBindings.missing";
     readonly ASSERTION_BMFFHASH_MALFORMED: "assertion.bmffHash.malformed";
     readonly ASSERTION_BMFFHASH_MISMATCH: "assertion.bmffHash.mismatch";
+    readonly CLAIM_SIGNATURE_OUTSIDE_VALIDITY: "claimSignature.outsideValidity";
+    readonly ALGORITHM_UNSUPPORTED: "algorithm.unsupported";
     readonly SIGNING_CREDENTIAL_INVALID: "signingCredential.invalid";
     readonly SIGNING_CREDENTIAL_UNTRUSTED: "signingCredential.untrusted";
 };
@@ -84,7 +86,7 @@ export type CoseKeyJwk = {
 };
 
 // @public
-export function createTrustPolicy(options?: TrustPolicyOptions): Promise<TrustPolicy>;
+export function createTrustPolicy(options: TrustPolicyOptions): Promise<TrustPolicy>;
 
 // @public
 export type InitSegmentValidation = {
@@ -222,8 +224,11 @@ export type SequenceValidationResult = {
 };
 
 // @public
+export type TrustFailure = typeof C2paStatusCode.SIGNING_CREDENTIAL_INVALID | typeof C2paStatusCode.SIGNING_CREDENTIAL_UNTRUSTED | typeof C2paStatusCode.CLAIM_SIGNATURE_OUTSIDE_VALIDITY | typeof C2paStatusCode.ALGORITHM_UNSUPPORTED;
+
+// @public
 export type TrustPolicy = {
-    readonly loadErrors: readonly string[];
+    readonly evaluate: (chain: readonly Uint8Array[]) => Promise<TrustFailure | null>;
 };
 
 // @public
@@ -231,6 +236,8 @@ export type TrustPolicyOptions = {
     readonly trustAnchors?: string;
     readonly allowedList?: string;
     readonly trustConfig?: string;
+    readonly validationTime?: () => Date;
+    readonly clockTolerance?: number;
 };
 
 // @public

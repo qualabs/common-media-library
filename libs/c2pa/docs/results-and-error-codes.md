@@ -128,6 +128,8 @@ import { C2paStatusCode } from '@svta/cml-c2pa'
 | `CLAIM_HARD_BINDINGS_MISSING` | `claim.hardBindings.missing` | The manifest has no hard binding assertion |
 | `ASSERTION_BMFFHASH_MALFORMED` | `assertion.bmffHash.malformed` | BMFF hash assertion or Merkle structure is malformed |
 | `ASSERTION_BMFFHASH_MISMATCH` | `assertion.bmffHash.mismatch` | BMFF content hash does not match the committed value |
+| `CLAIM_SIGNATURE_OUTSIDE_VALIDITY` | `claimSignature.outsideValidity` | The signing certificate or a CA certificate of its path is outside its validity period. Only with a trust policy. |
+| `ALGORITHM_UNSUPPORTED` | `algorithm.unsupported` | The runtime cannot verify a certificate signature of the chain. Only with a trust policy. |
 | `SIGNING_CREDENTIAL_INVALID` | `signingCredential.invalid` | The signing certificate breaks the certificate profile. Only with a trust policy. |
 | `SIGNING_CREDENTIAL_UNTRUSTED` | `signingCredential.untrusted` | The trust policy does not trust the signer. Only with a trust policy. |
 

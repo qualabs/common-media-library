@@ -43,6 +43,10 @@ export const C2paStatusCode = {
 	ASSERTION_BMFFHASH_MALFORMED: 'assertion.bmffHash.malformed',
 	/** BMFF content hash does not match the committed value (§15.2.2.3) */
 	ASSERTION_BMFFHASH_MISMATCH: 'assertion.bmffHash.mismatch',
+	/** The signing certificate or a CA certificate of its path is outside its validity period (§15.8.2). Reported only with a trust policy. */
+	CLAIM_SIGNATURE_OUTSIDE_VALIDITY: 'claimSignature.outsideValidity',
+	/** The runtime cannot verify a certificate signature algorithm that the certificate profile allows (§15.7). Reported only with a trust policy. */
+	ALGORITHM_UNSUPPORTED: 'algorithm.unsupported',
 	/** The signing certificate does not meet the certificate profile (§15.7). Reported only with a trust policy. */
 	SIGNING_CREDENTIAL_INVALID: 'signingCredential.invalid',
 	/** The trust policy does not trust the signing certificate (§15.7). Reported only with a trust policy. */

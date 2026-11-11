@@ -24,32 +24,43 @@ export type Asn1Element = {
 	readonly totalSize: number
 }
 
+const ASN1_MAX_LENGTH_BYTES = 4
+const BYTE_RANGE = 256
+
+/**
+ * Reads a DER length. Returns `null` for the indefinite form, a long form that is not minimal,
+ * more than 4 length bytes, or a length that runs past the end of `bytes`.
+ *
+ * @internal
+ */
 export function readLength(
 	bytes: Uint8Array,
 	offset: number,
-): { length: number; bytesRead: number } {
-	if (offset >= bytes.length) return { length: 0, bytesRead: 0 }
-	const first = bytes[offset] ?? 0
+): { length: number; bytesRead: number } | null {
+	if (offset >= bytes.length) return null
+	const first = bytes[offset]
 	if (first < ASN1_LONG_FORM_FLAG) return { length: first, bytesRead: 1 }
 	const count = first & ASN1_LONG_FORM_MASK
+	if (count === 0 || count > ASN1_MAX_LENGTH_BYTES || offset + count >= bytes.length) return null
+	if (bytes[offset + 1] === 0) return null
 	let length = 0
-	for (let i = 0; i < count; i++) {
-		length = (length << 8) | (bytes[offset + 1 + i] ?? 0)
-	}
+	for (let i = 1; i <= count; i++) length = length * BYTE_RANGE + bytes[offset + i]
+	if (length < ASN1_LONG_FORM_FLAG) return null
 	return { length, bytesRead: 1 + count }
 }
 
 export function readElement(bytes: Uint8Array, offset: number): Asn1Element | null {
-	if (offset + 2 > bytes.length) return null
-	const tag = bytes[offset] ?? 0
-	const { length, bytesRead } = readLength(bytes, offset + 1)
-	const headerSize = 1 + bytesRead
-	const valueEnd = offset + headerSize + length
+	if (offset < 0 || offset + 2 > bytes.length) return null
+	const tag = bytes[offset]
+	const header = readLength(bytes, offset + 1)
+	if (!header) return null
+	const headerSize = 1 + header.bytesRead
+	const valueEnd = offset + headerSize + header.length
 	if (valueEnd > bytes.length) return null
 	return {
 		tag,
 		value: bytes.subarray(offset + headerSize, valueEnd),
-		totalSize: headerSize + length,
+		totalSize: headerSize + header.length,
 	}
 }
 
@@ -75,20 +86,26 @@ export function readUnsigned(value: Uint8Array): number {
 
 /**
  * Decodes the value bytes of an OBJECT IDENTIFIER to dotted-decimal form.
+ * Returns an empty string for an encoding that DER does not allow.
  *
  * @internal
  */
 export function decodeOid(value: Uint8Array): string {
-	if (value.length === 0) return ''
-	const first = value[0]
-	const parts: number[] = first < 80 ? [Math.floor(first / 40), first % 40] : [2, first - 80]
+	const subidentifiers: number[] = []
 	let current = 0
-	for (let i = 1; i < value.length; i++) {
-		current = current * 128 + (value[i] & 0x7f)
-		if ((value[i] & 0x80) === 0) {
-			parts.push(current)
+	let started = false
+	for (const byte of value) {
+		if (!started && byte === ASN1_LONG_FORM_FLAG) return ''
+		started = true
+		current = current * 128 + (byte & ASN1_LONG_FORM_MASK)
+		if ((byte & ASN1_LONG_FORM_FLAG) === 0) {
+			subidentifiers.push(current)
 			current = 0
+			started = false
 		}
 	}
-	return parts.join('.')
+	if (started || subidentifiers.length === 0) return ''
+	const [first, ...rest] = subidentifiers
+	const arcs = first < 80 ? [Math.floor(first / 40), first % 40] : [2, first - 80]
+	return [...arcs, ...rest].join('.')
 }

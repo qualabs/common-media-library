@@ -15,16 +15,31 @@ import {
 	type Asn1Element,
 } from './asn1.ts'
 import { CURVE_P256, CURVE_P384, CURVE_P521 } from '../cose/constants.ts'
+import { hashesEqual } from '../utils.ts'
 
 const OID_BASIC_CONSTRAINTS = '2.5.29.19'
 const OID_KEY_USAGE = '2.5.29.15'
 const OID_EXTENDED_KEY_USAGE = '2.5.29.37'
 const OID_AUTHORITY_KEY_IDENTIFIER = '2.5.29.35'
+const OID_SUBJECT_KEY_IDENTIFIER = '2.5.29.14'
 /** @internal */
 export const OID_EC_PUBLIC_KEY = '1.2.840.10045.2.1'
-const OID_RSA_ENCRYPTION = '1.2.840.113549.1.1.1'
+/** @internal */
+export const OID_RSA_ENCRYPTION = '1.2.840.113549.1.1.1'
 /** @internal */
 export const OID_RSASSA_PSS = '1.2.840.113549.1.1.10'
+/** @internal */
+export const OID_ED25519 = '1.3.101.112'
+/**
+ * ML-DSA-44, ML-DSA-65, and ML-DSA-87. The same OIDs name the key and the signature algorithm.
+ *
+ * @internal
+ */
+export const ML_DSA_OIDS: ReadonlySet<string> = /* @__PURE__ */ new Set([
+	'2.16.840.1.101.3.4.3.17',
+	'2.16.840.1.101.3.4.3.18',
+	'2.16.840.1.101.3.4.3.19',
+])
 
 // The named curves that C2PA 2.4 §14.5.1.1 allows, by OID, as WebCrypto names.
 const NAMED_CURVES: Readonly<Record<string, string>> = {
@@ -94,6 +109,7 @@ export type ParsedCertificate = {
 	readonly digitalSignature: boolean
 	readonly keyCertSign: boolean
 	readonly hasAuthorityKeyId: boolean
+	readonly hasSubjectKeyId: boolean
 	readonly hasUnknownCriticalExtension: boolean
 }
 
@@ -105,6 +121,7 @@ type Extensions = Pick<
 	| 'digitalSignature'
 	| 'keyCertSign'
 	| 'hasAuthorityKeyId'
+	| 'hasSubjectKeyId'
 	| 'hasUnknownCriticalExtension'
 >
 
@@ -117,6 +134,7 @@ const NO_EXTENSIONS: Extensions = {
 	digitalSignature: false,
 	keyCertSign: false,
 	hasAuthorityKeyId: false,
+	hasSubjectKeyId: false,
 	hasUnknownCriticalExtension: false,
 }
 
@@ -135,16 +153,16 @@ function parseTime(element: Asn1Element): Date | null {
 	} else {
 		return null
 	}
-	return new Date(
-		Date.UTC(
-			year,
-			Number(match[2]) - 1,
-			Number(match[3]),
-			Number(match[4]),
-			Number(match[5]),
-			Number(match[6]),
-		),
-	)
+	const [month, day, hour, minute, second] = match.slice(2).map(Number)
+	const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second))
+	const inRange =
+		date.getUTCFullYear() === year &&
+		date.getUTCMonth() === month - 1 &&
+		date.getUTCDate() === day &&
+		date.getUTCHours() === hour &&
+		date.getUTCMinutes() === minute &&
+		date.getUTCSeconds() === second
+	return inRange ? date : null
 }
 
 type Asn1Child = Asn1Element & { readonly raw: Uint8Array }
@@ -166,18 +184,26 @@ function parseExtensions(wrapper: Uint8Array): Extensions {
 	const list = readElement(wrapper, 0)
 	if (!list || list.tag !== ASN1_TAG_SEQUENCE) throw new Error('Malformed extensions')
 
+	const seen = new Set<string>()
 	for (const ext of readChildren(list.value)) {
 		const fields = readChildren(ext.value)
 		const oidEl = fields[0]
 		const valueEl = fields[fields.length - 1]
-		if (oidEl?.tag !== ASN1_TAG_OBJECT_IDENTIFIER || valueEl?.tag !== ASN1_TAG_OCTET_STRING)
-			continue
+		const hasCriticalField = fields.length === 3 && fields[1].tag === ASN1_TAG_BOOLEAN
+		if (
+			oidEl?.tag !== ASN1_TAG_OBJECT_IDENTIFIER ||
+			valueEl?.tag !== ASN1_TAG_OCTET_STRING ||
+			(fields.length !== 2 && !hasCriticalField)
+		)
+			throw new Error('Malformed extension')
 		const inner = readElement(valueEl.value, 0)
-		if (!inner) throw new Error('Malformed extension value')
+		if (!inner || inner.totalSize !== valueEl.value.length)
+			throw new Error('Malformed extension value')
 
 		const oid = decodeOid(oidEl.value)
-		const critical =
-			fields.length === 3 && fields[1].tag === ASN1_TAG_BOOLEAN && fields[1].value[0] !== 0
+		if (!oid || seen.has(oid)) throw new Error('Malformed or repeated extension')
+		seen.add(oid)
+		const critical = hasCriticalField && fields[1].value[0] !== 0
 		if (critical && !KNOWN_EXTENSIONS.has(oid)) result.hasUnknownCriticalExtension = true
 
 		switch (oid) {
@@ -197,6 +223,9 @@ function parseExtensions(wrapper: Uint8Array): Extensions {
 				break
 			case OID_AUTHORITY_KEY_IDENTIFIER:
 				result.hasAuthorityKeyId = true
+				break
+			case OID_SUBJECT_KEY_IDENTIFIER:
+				result.hasSubjectKeyId = true
 				break
 			case OID_EXTENDED_KEY_USAGE:
 				result.ekuOids = readChildren(inner.value)
@@ -249,7 +278,7 @@ function parsePublicKeyInfo(spki: Uint8Array): PublicKeyInfo {
 export function parseCertificate(certDER: Uint8Array): ParsedCertificate | null {
 	try {
 		const cert = readElement(certDER, 0)
-		if (!cert || cert.tag !== ASN1_TAG_SEQUENCE) return null
+		if (!cert || cert.tag !== ASN1_TAG_SEQUENCE || cert.totalSize !== certDER.length) return null
 		const [tbs, sigAlg, sigValue] = readChildren(cert.value)
 		if (
 			tbs?.tag !== ASN1_TAG_SEQUENCE ||
@@ -265,9 +294,11 @@ export function parseCertificate(certDER: Uint8Array): ParsedCertificate | null 
 		const start = tbsFields[0]?.tag === ASN1_TAG_CONTEXT_0 ? 1 : 0
 		const versionEl = start ? readElement(tbsFields[0].value, 0) : null
 		const version = versionEl?.tag === ASN1_TAG_INTEGER ? readUnsigned(versionEl.value) + 1 : 1
-		const [serial, , issuer, validity, subject, spki, ...optional] = tbsFields.slice(start)
+		const [serial, tbsSigAlg, issuer, validity, subject, spki, ...optional] = tbsFields.slice(start)
 		if (
 			serial?.tag !== ASN1_TAG_INTEGER ||
+			!tbsSigAlg ||
+			!hashesEqual(tbsSigAlg.raw, sigAlg.raw) ||
 			issuer?.tag !== ASN1_TAG_SEQUENCE ||
 			validity?.tag !== ASN1_TAG_SEQUENCE ||
 			subject?.tag !== ASN1_TAG_SEQUENCE ||

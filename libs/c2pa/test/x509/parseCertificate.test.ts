@@ -66,4 +66,49 @@ describe('parseCertificate', () => {
 		strictEqual(parseCertificate(new Uint8Array([0x30, 0x03, 0x02, 0x01, 0x01])), null)
 		strictEqual(parseCertificate(loadDer('leaf-ec').subarray(0, 100)), null)
 	})
+
+	it('returns null at once for a length that overflows 32 bits', { timeout: 1000 }, () => {
+		strictEqual(
+			parseCertificate(Uint8Array.from([0x30, 0x0a, 0x30, 0x84, 0x80, 0, 0, 0, 0, 0, 0, 0])),
+			null,
+		)
+	})
+
+	it('returns null for bytes after the end of the certificate', () => {
+		strictEqual(parseCertificate(Uint8Array.from([...loadDer('leaf-ec'), 0])), null)
+	})
+
+	it('returns null when the signed algorithm differs from signatureAlgorithm', () => {
+		const der = loadDer('leaf-ec').slice()
+		const ecdsaSha256 = [0x2a, 0x86, 0x48, 0xce, 0x3d, 0x04, 0x03, 0x02]
+		const outer = lastIndexOf(der, ecdsaSha256)
+		der[outer + ecdsaSha256.length - 1] = 0x03
+		strictEqual(parseCertificate(der), null)
+	})
+
+	it('returns null for a validity time out of range', () => {
+		const der = loadDer('leaf-ec').slice()
+		const notAfter = lastIndexOf(der, [...new TextEncoder().encode('20991231235959Z')])
+		der.set(new TextEncoder().encode('20991331'), notAfter)
+		strictEqual(parseCertificate(der), null)
+	})
+
+	it('reads the subject key identifier', () => {
+		strictEqual(parseCertificate(loadDer('intermediate-ec'))?.hasSubjectKeyId, true)
+		strictEqual(parseCertificate(loadDer('intermediate-ec-no-ski'))?.hasSubjectKeyId, false)
+	})
+
+	it('reports critical name constraints as an unknown critical extension', () => {
+		strictEqual(
+			parseCertificate(loadDer('intermediate-ec-name-constraints'))?.hasUnknownCriticalExtension,
+			true,
+		)
+	})
 })
+
+function lastIndexOf(bytes: Uint8Array, pattern: readonly number[]): number {
+	for (let i = bytes.length - pattern.length; i >= 0; i--) {
+		if (pattern.every((byte, j) => bytes[i + j] === byte)) return i
+	}
+	throw new Error('pattern not found')
+}

@@ -14,6 +14,7 @@ Supported C2PA segment validation methods:
 - Validate a live segment with the VSI and EMSG method and the session keys of the init segment: `validateC2paSegment`
 - Validate a per-segment C2PA manifest box: `validateC2paManifestBoxSegment`
 - Validate the Merkle leaf and proof in a VOD segment: `validateC2paMerkleSegment`
+- Check whether a trust policy trusts the signer: `createTrustPolicy`
 - Map a validation result to a status code: `C2paStatusCode`, `LiveVideoStatusCode`
 
 Do not write your own COSE, CBOR, or manifest box parsing for C2PA. Open an issue for a validation method that is missing.
@@ -94,12 +95,30 @@ async function validateMerkleSegment(initUrl: string, segmentUrl: string): Promi
 }
 ```
 
+### Signer trust (all methods)
+
+`isValid` does not tell who signed the content. Create a trust policy once, and pass it to `validateC2paInitSegment` and `validateC2paManifestBoxSegment`. Every result then carries `isTrusted`. If the policy does not trust the signer, `isValid` is `false`. VSI and Merkle segments copy `isTrusted` from their init segment.
+
+```typescript
+import { createTrustPolicy, validateC2paInitSegment } from '@svta/cml-c2pa'
+
+async function validateSigner(initUrl: string, trustAnchorsUrl: string): Promise<void> {
+  const anchorsResponse = await fetch(trustAnchorsUrl)
+  const trustPolicy = await createTrustPolicy({ trustAnchors: await anchorsResponse.text() })
+
+  const initResponse = await fetch(initUrl)
+  const init = await validateC2paInitSegment(new Uint8Array(await initResponse.arrayBuffer()), { trustPolicy })
+  console.log(init.isValid, init.isTrusted)
+}
+```
+
 ## Docs
 
 - [VSI/EMSG Validation](https://github.com/streaming-video-technology-alliance/common-media-library/blob/main/libs/c2pa/docs/vsi-validation.md) (§19.4)
 - [Manifest Box Validation](https://github.com/streaming-video-technology-alliance/common-media-library/blob/main/libs/c2pa/docs/manifest-box-validation.md) (§19.3)
 - [VOD Merkle Validation](https://github.com/streaming-video-technology-alliance/common-media-library/blob/main/libs/c2pa/docs/merkle-validation.md) (§15.12.2 / §18.6)
 - [Results and Error Codes](https://github.com/streaming-video-technology-alliance/common-media-library/blob/main/libs/c2pa/docs/results-and-error-codes.md)
+- [Signer Trust Validation](docs/trust-validation.md)
 
 ## References
 

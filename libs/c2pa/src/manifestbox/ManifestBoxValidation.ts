@@ -1,6 +1,7 @@
 import type { C2paManifest } from '../C2paManifest.ts'
 import type { C2paStatusCode } from '../C2paStatusCode.ts'
 import type { LiveVideoStatusCode } from '../LiveVideoStatusCode.ts'
+import type { TrustPolicy } from '../trust/TrustPolicy.ts'
 
 /**
  * The result of validating a single C2PA manifest-box live stream segment.
@@ -21,6 +22,8 @@ export type ManifestBoxValidationResult = {
 	readonly bmffHashHex: string | null
 	readonly isValid: boolean
 	readonly errorCodes: readonly (LiveVideoStatusCode | C2paStatusCode)[]
+	/** `true` when the trust policy trusts the signer of this segment. Absent without a policy. When it is `false`, `isValid` is `false`. */
+	readonly isTrusted?: boolean
 }
 
 /**
@@ -43,6 +46,8 @@ export type ManifestBoxValidationOptions = {
 		readonly method: string
 		readonly validate: ManifestBoxContinuityValidator
 	}
+	/** Policy that decides whether the signer of each segment is trusted. Create it with `createTrustPolicy`. */
+	readonly trustPolicy?: TrustPolicy
 }
 
 /**

@@ -159,7 +159,7 @@ export function buildMediaContent(seed: number): Uint8Array {
 
 // --- Init segment fixture (JUMBF manifest with c2pa.hash.bmff.v3 assertion) ---
 
-function buildJumd(label: string): Uint8Array {
+export function buildJumd(label: string): Uint8Array {
 	const labelBytes = TEXT_ENCODER.encode(label)
 	const data = new Uint8Array(16 + 1 + labelBytes.length + 1)
 	data[16] = 0x03 // toggles: requestable + label present

@@ -13,7 +13,12 @@ import type { InternalAssertionData } from '../claim/InternalManifestData.ts'
 import { validateManifestIntegrity } from '../claim/validateManifestIntegrity.ts'
 import { convertCoseKeyToJwk } from '../cose/convertCoseKeyToJwk.ts'
 import { verifySignerBinding } from '../cose/verifySignerBinding.ts'
-import type { InitSegmentValidation, ValidatedSessionKey } from './InitSegmentValidation.ts'
+import type {
+	InitSegmentValidation,
+	InitSegmentValidationOptions,
+	ValidatedSessionKey,
+} from './InitSegmentValidation.ts'
+import { evaluateSignerTrust } from '../trust/evaluateSignerTrust.ts'
 import { validateMerkleMaps } from '../merkle/validateMerkleMaps.ts'
 import {
 	asUnsignedInteger,
@@ -230,7 +235,12 @@ async function validateSessionKeys(
  * `c2pa.session-keys` assertion does not cause `SESSIONKEY_INVALID`. In a section 19.4 stream, an empty
  * `sessionKeys` list makes each VSI segment fail with `SEGMENT_INVALID`.
  *
+ * With a `trustPolicy`, the result, every session key, and every merkle map carry `isTrusted`.
+ * If the policy does not trust the signer, the result is not valid and `errorCodes` contains
+ * `signingCredential.untrusted` or `signingCredential.invalid` (§15.7).
+ *
  * @param bytes - Raw init segment bytes
+ * @param options - Optional trust policy
  * @returns Structured validation result. It has `INIT_INVALID` if the segment has an `mdat` box or no `c2pa.hash.bmff.v3` assertion. It also has `INIT_INVALID` if the content hash does not include the `moov` box (C2PA section 19.2.3). A manifest without a hard binding assertion also has `CLAIM_HARD_BINDINGS_MISSING`. A content hash that does not match adds `INIT_INVALID` and `ASSERTION_BMFFHASH_MISMATCH`. A `c2pa.hash.bmff.v3` assertion that does not conform to the `bmff-hash-map` adds `ASSERTION_BMFFHASH_MALFORMED`.
  * @throws If no C2PA UUID box is found
  *
@@ -239,7 +249,11 @@ async function validateSessionKeys(
  *
  * @public
  */
-export async function validateC2paInitSegment(bytes: Uint8Array): Promise<InitSegmentValidation> {
+export async function validateC2paInitSegment(
+	bytes: Uint8Array,
+	options?: InitSegmentValidationOptions,
+): Promise<InitSegmentValidation> {
+	const trustPolicy = options?.trustPolicy
 	const boxes = readIsoBoxes(bytes)
 	if (findIsoBox(boxes, box => box.type === 'mdat')) {
 		return {
@@ -250,16 +264,15 @@ export async function validateC2paInitSegment(bytes: Uint8Array): Promise<InitSe
 			merkleMaps: [],
 			isValid: false,
 			errorCodes: [LiveVideoStatusCode.INIT_INVALID],
+			...(trustPolicy && { isTrusted: false }),
 		}
 	}
 
 	const internalData = readC2paManifest(bytes, boxes)
 	const { manifest } = internalData
-	const {
-		codes: integrityCodes,
-		certificate,
-		verifiedAssertions,
-	} = await validateManifestIntegrity(internalData)
+	const integrity = await validateManifestIntegrity(internalData)
+	const { codes: integrityCodes, verifiedAssertions } = integrity
+	const certificate = integrity.chain[0] ?? null
 
 	const bmffHashAssertion =
 		verifiedAssertions.find(a => a.label === BMFF_HASH_ASSERTION_LABEL) ?? null
@@ -293,9 +306,12 @@ export async function validateC2paInitSegment(bytes: Uint8Array): Promise<InitSe
 	if (bmffHashCode) codes.add(bmffHashCode)
 	if (sessionKeysValidation.hasInvalidSessionKey) codes.add(LiveVideoStatusCode.SESSIONKEY_INVALID)
 	for (const code of integrityCodes) codes.add(code)
+
+	const trust = trustPolicy ? await evaluateSignerTrust(trustPolicy, integrity) : null
+	if (trust?.failure) codes.add(trust.failure)
 	const errorCodes = [...codes]
 
-	return {
+	const result: InitSegmentValidation = {
 		manifest,
 		certificate,
 		manifestId: internalData.manifestId,
@@ -303,5 +319,14 @@ export async function validateC2paInitSegment(bytes: Uint8Array): Promise<InitSe
 		merkleMaps: exposedMerkleMaps,
 		isValid: errorCodes.length === 0,
 		errorCodes,
+	}
+	if (!trust) return result
+
+	const { isTrusted } = trust
+	return {
+		...result,
+		sessionKeys: result.sessionKeys.map(key => ({ ...key, isTrusted })),
+		merkleMaps: result.merkleMaps.map(map => ({ ...map, isTrusted })),
+		isTrusted,
 	}
 }

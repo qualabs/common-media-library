@@ -74,6 +74,7 @@ C2PA (Coalition for Content Provenance and Authenticity) live video validation f
 - Validate a live segment with the VSI and EMSG method and the session keys of the init segment: `validateC2paSegment`
 - Validate a per-segment C2PA manifest box: `validateC2paManifestBoxSegment`
 - Validate the Merkle leaf and proof in a VOD segment: `validateC2paMerkleSegment`
+- Check whether a trust policy trusts the signer: `createTrustPolicy`
 - Map a validation result to a status code: `C2paStatusCode`, `LiveVideoStatusCode`
 
 Do not write your own COSE, CBOR, or manifest box parsing for C2PA. Open an issue for a validation method that is missing.

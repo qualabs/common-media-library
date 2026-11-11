@@ -3,6 +3,7 @@ import type { C2paStatusCode } from '../C2paStatusCode.ts'
 import type { CoseKeyJwk } from '../cose/CoseKeyJwk.ts'
 import type { LiveVideoStatusCode } from '../LiveVideoStatusCode.ts'
 import type { MerkleMap } from '../merkle/MerkleSegmentValidation.ts'
+import type { TrustPolicy } from '../trust/TrustPolicy.ts'
 
 /**
  * A session key extracted and verified from a C2PA `c2pa.session-keys` assertion.
@@ -18,6 +19,8 @@ export type ValidatedSessionKey = {
 	readonly minSequenceNumber: number
 	readonly validityPeriod: number
 	readonly createdAt: string
+	/** `true` when the trust policy passed to `validateC2paInitSegment` trusts the signer of the init segment. Absent without a policy. */
+	readonly isTrusted?: boolean
 }
 
 /**
@@ -35,4 +38,16 @@ export type InitSegmentValidation = {
 	readonly merkleMaps: readonly MerkleMap[]
 	readonly isValid: boolean
 	readonly errorCodes: readonly (LiveVideoStatusCode | C2paStatusCode)[]
+	/** `true` when the trust policy trusts the signer. Absent without a policy. When it is `false`, `isValid` is `false`. */
+	readonly isTrusted?: boolean
+}
+
+/**
+ * Options for `validateC2paInitSegment`.
+ *
+ * @public
+ */
+export type InitSegmentValidationOptions = {
+	/** Policy that decides whether the signer is trusted. Create it with `createTrustPolicy`. */
+	readonly trustPolicy?: TrustPolicy
 }

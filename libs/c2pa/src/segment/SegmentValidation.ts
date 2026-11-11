@@ -1,3 +1,4 @@
+import type { C2paStatusCode } from '../C2paStatusCode.ts'
 import type { LiveVideoStatusCode } from '../LiveVideoStatusCode.ts'
 import type { SequenceValidationResult } from '../vsi/SequenceState.ts'
 
@@ -15,5 +16,10 @@ export type SegmentValidationResult = {
 	readonly kidHex: string | null
 	readonly sequenceResult: SequenceValidationResult
 	readonly isValid: boolean
-	readonly errorCodes: readonly LiveVideoStatusCode[]
+	readonly errorCodes: readonly (LiveVideoStatusCode | C2paStatusCode)[]
+	/**
+	 * `isTrusted` of the session key that matched the segment. Absent when no key matched or the key does not carry it.
+	 * When it is `false`, `errorCodes` contains `signingCredential.untrusted`.
+	 */
+	readonly isTrusted?: boolean
 }

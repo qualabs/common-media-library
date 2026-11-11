@@ -1,3 +1,4 @@
+import { C2paStatusCode } from '../C2paStatusCode.ts'
 import { verifyCoseSign1 } from '../cose/verifyCoseSign1.ts'
 import { decodeCoseSign1 } from '../cose/decodeCoseSign1.ts'
 import { extractVsiEmsgBox } from '../emsg/extractVsiEmsgBox.ts'
@@ -36,6 +37,9 @@ function findSessionKey(
  * A duplicate, out-of-order, or below-minimum `sequenceNumber` fails with
  * `livevideo.segment.invalid`. A gap in the sequence numbers does not fail the
  * segment. `result.sequenceResult` reports the gap with its missing range.
+ *
+ * The result carries the `isTrusted` value of the matched session key, which
+ * `validateC2paInitSegment` sets when it receives a trust policy.
  *
  * @param segmentBytes - Raw segment bytes
  * @param sessionKeys - Available session keys from the init segment
@@ -120,17 +124,24 @@ export async function validateC2paSegment(
 
 	const authentic = signatureValid && hashValid && !keyNotYetActive && !keyExpired
 
-	const codes = new Set<LiveVideoStatusCode>()
+	const { isTrusted } = sessionKey
+	const codes = new Set<LiveVideoStatusCode | C2paStatusCode>()
 	if (!authentic || !sequenceAboveMin) codes.add(LiveVideoStatusCode.SEGMENT_INVALID)
 	// C2PA 2.4 §19.7.3 defines only the minSequenceNumber check. The order check is a library rule with the 2.5 draft code.
 	// A gap is not a failure. sequenceResult still reports it, so the caller can detect missing segments.
 	if (!sequenceResult.isValid && sequenceResult.reason !== SequenceValidationReason.GAP_DETECTED) {
 		codes.add(LiveVideoStatusCode.SEGMENT_INVALID)
 	}
+	if (isTrusted === false) codes.add(C2paStatusCode.SIGNING_CREDENTIAL_UNTRUSTED)
 	const errorCodes = [...codes]
 
 	return {
-		result: { ...baseFields, isValid: errorCodes.length === 0, errorCodes },
+		result: {
+			...baseFields,
+			isValid: errorCodes.length === 0,
+			errorCodes,
+			...(isTrusted !== undefined && { isTrusted }),
+		},
 		nextSequenceState: authentic ? nextSequenceState : sequenceState,
 	}
 }

@@ -1,6 +1,6 @@
 import type { C2paStatusCode } from '../C2paStatusCode.ts'
 import { C2paStatusCode as Code } from '../C2paStatusCode.ts'
-import { extractCertificateFromSignatureBytes } from '../extractManifestCertificate.ts'
+import { extractCertificateChainFromSignatureBytes } from '../extractManifestCertificate.ts'
 import type { InternalAssertionData, InternalManifestData } from './InternalManifestData.ts'
 import { validateActionIngredients } from './validateActionIngredients.ts'
 import { extractLabelFromUrl, validateAssertionHashes } from './validateAssertionHashes.ts'
@@ -28,15 +28,18 @@ const ASSERTION_INSTANCE_SUFFIX = /__\d+$/
 export type ManifestIntegrity = {
 	/** Status codes for the failures found, empty when every check passes */
 	readonly codes: readonly C2paStatusCode[]
-	/** DER-encoded end-entity certificate from the claim signature, or `null` when the signature is absent or carries no certificate */
-	readonly certificate: Uint8Array | null
+	/** DER-encoded `x5chain` of the claim signature, leaf first, or empty when absent */
+	readonly chain: readonly Uint8Array[]
+	/** `true` when the claim signature verifies with the first certificate of `chain` */
+	readonly isSignatureValid: boolean
 	/** The assertions whose claim reference resolved to a single box with a matching hash. Read an assertion by label from this list, not from the raw store. The list is authenticated only when `codes` is empty. */
 	readonly verifiedAssertions: readonly InternalAssertionData[]
 }
 
 type ClaimSignatureCheck = {
 	readonly code: C2paStatusCode | null
-	readonly certificate: Uint8Array | null
+	readonly chain: readonly Uint8Array[]
+	readonly verified: boolean
 }
 
 /**
@@ -52,16 +55,21 @@ async function validateClaimSignature({
 	signatureUriCode,
 	signatureBytes,
 }: InternalManifestData): Promise<ClaimSignatureCheck> {
-	const certificate = signatureBytes ? extractCertificateFromSignatureBytes(signatureBytes) : null
+	const chain = signatureBytes ? extractCertificateChainFromSignatureBytes(signatureBytes) : []
+	const certificate = chain[0]
 
-	if (claimCode === Code.CLAIM_MULTIPLE) return { code: null, certificate }
-	if (!claimCborBytes) return { code: Code.CLAIM_MISSING, certificate }
+	if (claimCode === Code.CLAIM_MULTIPLE) return { code: null, chain, verified: false }
+	if (!claimCborBytes) return { code: Code.CLAIM_MISSING, chain, verified: false }
 	if (!signatureBytes || signatureUriCode)
-		return { code: Code.CLAIM_SIGNATURE_MISSING, certificate }
-	if (!certificate) return { code: Code.CLAIM_SIGNATURE_MISMATCH, certificate }
+		return { code: Code.CLAIM_SIGNATURE_MISSING, chain, verified: false }
+	if (!certificate) return { code: Code.CLAIM_SIGNATURE_MISMATCH, chain, verified: false }
 
 	const signatureValid = await verifyClaimSignature(signatureBytes, claimCborBytes, certificate)
-	return { code: signatureValid ? null : Code.CLAIM_SIGNATURE_MISMATCH, certificate }
+	return {
+		code: signatureValid ? null : Code.CLAIM_SIGNATURE_MISMATCH,
+		chain,
+		verified: signatureValid,
+	}
 }
 
 /**
@@ -79,7 +87,7 @@ async function validateClaimSignature({
  * header of the signature. The certificate is not checked against a trust list.
  *
  * @param internal - Enriched manifest data with raw assertion bytes and claim references
- * @returns The status codes for any failures found, the certificate of the claim signature, and the claim-verified assertions
+ * @returns The status codes for any failures found, the certificate chain of the claim signature, and the claim-verified assertions
  *
  * @internal
  */
@@ -134,7 +142,8 @@ export async function validateManifestIntegrity(
 
 	return {
 		codes: [...new Set(codes)],
-		certificate: signature.certificate,
+		chain: signature.chain,
+		isSignatureValid: signature.verified,
 		verifiedAssertions: assertionHashes.verified,
 	}
 }

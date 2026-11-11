@@ -23,9 +23,9 @@ The `errorCodes` array may contain several codes when several checks fail. When 
 
 ## Signer Trust
 
-`isValid` is `true` when the manifest is well formed and the claim signature verifies. Every store assertion must be referenced by the claim and match its hash. The manifest must have exactly one hard binding. The signature is verified with the end-entity certificate that the manifest carries in its `x5chain` header. The library does not check that certificate against a trust list. Any party with a certificate can produce a manifest that validates.
+`isValid` is `true` when the manifest is well formed and the claim signature verifies. Every store assertion must be referenced by the claim and match its hash. The manifest must have exactly one hard binding. The signature is verified with the end-entity certificate that the manifest carries in its `x5chain` header. `isValid` does not depend on who owns that certificate. Any party with a certificate can produce a manifest that validates.
 
-Before you present content as authentic, compare the signer with your own trust anchors. `InitSegmentValidation.certificate` and `ManifestBoxValidationResult.certificate` hold the DER-encoded end-entity certificate from the claim signature. The value is `null` when the signature is absent or carries no certificate.
+Before you present content as authentic, check the signer. Pass a trust policy from `createTrustPolicy` to get an `isTrusted` field on every result. See [Signer Trust Validation](trust-validation.md). `InitSegmentValidation.certificate` and `ManifestBoxValidationResult.certificate` hold the DER-encoded end-entity certificate from the claim signature. The value is `null` when the signature is absent or carries no certificate.
 
 A manifest without a `c2pa.signature` box, or with a claim `signature` URI that does not resolve to that box, fails with `C2paStatusCode.CLAIM_SIGNATURE_MISSING`. A signature that carries no certificate, or that does not verify over the claim, fails with `C2paStatusCode.CLAIM_SIGNATURE_MISMATCH`.
 
@@ -128,6 +128,10 @@ import { C2paStatusCode } from '@svta/cml-c2pa'
 | `CLAIM_HARD_BINDINGS_MISSING` | `claim.hardBindings.missing` | The manifest has no hard binding assertion |
 | `ASSERTION_BMFFHASH_MALFORMED` | `assertion.bmffHash.malformed` | BMFF hash assertion or Merkle structure is malformed |
 | `ASSERTION_BMFFHASH_MISMATCH` | `assertion.bmffHash.mismatch` | BMFF content hash does not match the committed value |
+| `CLAIM_SIGNATURE_OUTSIDE_VALIDITY` | `claimSignature.outsideValidity` | The signing certificate or a CA certificate of its path is outside its validity period. Only with a trust policy. |
+| `ALGORITHM_UNSUPPORTED` | `algorithm.unsupported` | The runtime cannot verify a certificate signature of the chain. Only with a trust policy. |
+| `SIGNING_CREDENTIAL_INVALID` | `signingCredential.invalid` | The signing certificate breaks the certificate profile. Only with a trust policy. |
+| `SIGNING_CREDENTIAL_UNTRUSTED` | `signingCredential.untrusted` | The trust policy does not trust the signer. Only with a trust policy. |
 
 Versions 1.2.0 and earlier report `claim.signature.mismatch` for `CLAIM_SIGNATURE_MISMATCH`. That value does not match the C2PA specification. Compare codes with the `C2paStatusCode` constants, not with string literals.
 

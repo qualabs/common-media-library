@@ -187,7 +187,7 @@ The `ManifestBoxValidationResult` contains:
 > [!NOTE]
 > Unlike the VSI method, the Manifest Box method can produce both `LiveVideoStatusCode` and `C2paStatusCode` error codes. Each segment contains a full manifest. The library runs these integrity checks on it: assertion references and hashes, undeclared assertions, the hard binding count, duplicate manifest boxes, and claim signature verification. The segment fields above come only from assertions whose hash matches a claim reference. Check `isValid` before you use any field. A `ManifestBoxContinuityValidator` receives the parsed manifest, whose `assertions` list is the raw assertion store.
 >
-> A segment without a `c2pa.signature` box fails with `C2paStatusCode.CLAIM_SIGNATURE_MISSING`. The claim signature is verified with the certificate inside the segment. The library does not check that certificate against a trust list. See [Signer Trust](results-and-error-codes.md#signer-trust).
+> A segment without a `c2pa.signature` box fails with `C2paStatusCode.CLAIM_SIGNATURE_MISSING`. The claim signature is verified with the certificate inside the segment. To check that certificate against trust anchors, pass a `trustPolicy` in the options. See [Signer Trust Validation](trust-validation.md).
 >
 > C2PA section 19.3 requires a `c2pa.hash.bmff.v3` assertion in the manifest of each segment. A segment without that assertion fails with `LiveVideoStatusCode.SEGMENT_INVALID`. If the manifest also has no other hard binding assertion, the result also includes `C2paStatusCode.CLAIM_HARD_BINDINGS_MISSING`. The library adds that code only for a claim that decodes. A manifest with a claim code such as `C2paStatusCode.CLAIM_MISSING` does not also report `CLAIM_HARD_BINDINGS_MISSING`.
 >

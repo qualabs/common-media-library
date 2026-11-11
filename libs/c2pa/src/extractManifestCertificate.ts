@@ -7,6 +7,39 @@ import { parseJumbfLabel } from './jumbf/parseJumbfLabel.ts'
 
 const C2PA_SIGNATURE_LABEL = 'c2pa.signature'
 const X5CHAIN_COSE_HEADER = 33
+const X5CHAIN_LEGACY_HEADER = 'x5chain'
+
+type CoseHeaderRecord = Readonly<Record<number | string, unknown>>
+
+function readX5chain(header: CoseHeaderRecord): unknown {
+	return header[X5CHAIN_COSE_HEADER] ?? header[X5CHAIN_LEGACY_HEADER]
+}
+
+/**
+ * Extracts the full `x5chain` (leaf first) from raw COSE_Sign1 signature bytes.
+ *
+ * Accepts the integer label 33 and the legacy string label `x5chain`. The integer label wins
+ * when both are present in one header bucket. An `x5chain` in both buckets makes the signature
+ * malformed (§14.5), so the function returns an empty chain.
+ *
+ * @internal
+ */
+export function extractCertificateChainFromSignatureBytes(
+	signatureBytes: Uint8Array,
+): Uint8Array[] {
+	try {
+		const cose = decodeCoseSign1(signatureBytes)
+		const protectedChain = readX5chain(cose.protectedHeader)
+		const unprotectedChain = readX5chain(cose.unprotectedHeader)
+		if (protectedChain !== undefined && unprotectedChain !== undefined) return []
+		const x5chain = protectedChain ?? unprotectedChain
+		const certs: unknown[] = Array.isArray(x5chain) ? x5chain : [x5chain]
+		const end = certs.findIndex(cert => !(cert instanceof Uint8Array))
+		return (end === -1 ? certs : certs.slice(0, end)) as Uint8Array[]
+	} catch {
+		return []
+	}
+}
 
 /**
  * Extracts the end-entity certificate from raw COSE_Sign1 signature bytes.
@@ -16,17 +49,7 @@ const X5CHAIN_COSE_HEADER = 33
 export function extractCertificateFromSignatureBytes(
 	signatureBytes: Uint8Array,
 ): Uint8Array | null {
-	try {
-		const cose = decodeCoseSign1(signatureBytes)
-		const x5chain = (cose.protectedHeader[X5CHAIN_COSE_HEADER] ??
-			cose.unprotectedHeader[X5CHAIN_COSE_HEADER]) as Uint8Array | Uint8Array[] | null | undefined
-		if (!x5chain) return null
-
-		const certDER = Array.isArray(x5chain) ? x5chain[0] : x5chain
-		return certDER instanceof Uint8Array ? certDER : null
-	} catch {
-		return null
-	}
+	return extractCertificateChainFromSignatureBytes(signatureBytes)[0] ?? null
 }
 
 function findSignatureContentBytes(boxes: JumbfBox[]): Uint8Array | null {

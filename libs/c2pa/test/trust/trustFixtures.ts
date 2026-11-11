@@ -1,10 +1,9 @@
 import { readFileSync } from 'node:fs'
-import { hashCertificate } from '../../src/trust/evaluateCertificateTrust.ts'
 
 const PKI_ENTRY_PATTERN = /^# (\S+)\n(-----BEGIN [^-]+-----[\s\S]*?-----END [^-]+-----)/gm
 const PEM_BODY_PATTERN = /-----BEGIN [^-]+-----([\s\S]*?)-----END [^-]+-----/
 
-export const PKI_PATH: string = new URL('../fixtures/trust/pki.pem', import.meta.url).pathname
+const PKI_PATH: string = new URL('../fixtures/trust/pki.pem', import.meta.url).pathname
 
 const PKI: ReadonlyMap<string, string> = new Map(
 	[...readFileSync(PKI_PATH, 'utf8').matchAll(PKI_ENTRY_PATTERN)].map(([, name, block]) => [
@@ -26,22 +25,7 @@ export function loadDer(name: string): Uint8Array {
 	return new Uint8Array(Buffer.from(body.replace(/\s/g, ''), 'base64'))
 }
 
-/** Allowed list with one PEM block, one hash line, and lines the parser must skip. */
-export async function allowedListFixture(): Promise<string> {
-	return [
-		'# Allowed signers',
-		pem('self-signed-leaf'),
-		await hashCertificate(loadDer('leaf-ec-expired')),
-		'not-a-hash',
-		'QUJD',
-		'',
-	].join('\n')
-}
-
-/** Trust config that accepts only c2pa-kp-claimSigning. */
-export const CLAIM_SIGNING_ONLY_CONFIG = `// C2PA Signing
-1.3.6.1.4.1.62558.2.1
-
-# lines that are not OIDs are ignored
-not.an.oid
+/** Trust config that adds a vendor EKU, in the c2pa-rs format. */
+export const VENDOR_EKU_CONFIG = `// Vendor signing
+1.3.6.1.4.1.99999.1
 `

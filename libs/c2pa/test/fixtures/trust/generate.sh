@@ -12,6 +12,7 @@ VALID_FROM=20250101000000Z
 VALID_TO=20991231235959Z
 EXPIRED_FROM=20200101000000Z
 EXPIRED_TO=20210101000000Z
+FUTURE_FROM=20980101000000Z
 
 cat > "$WORK/ca.cnf" <<'EOF'
 [ ca ]
@@ -47,6 +48,26 @@ basicConstraints = critical, CA:TRUE, pathlen:0
 keyUsage = critical, keyCertSign, cRLSign
 subjectKeyIdentifier = hash
 authorityKeyIdentifier = keyid
+
+[ intermediate_no_ski ]
+basicConstraints = critical, CA:TRUE, pathlen:0
+keyUsage = critical, keyCertSign, cRLSign
+subjectKeyIdentifier = none
+authorityKeyIdentifier = keyid
+
+[ leaf_aki_issuer ]
+basicConstraints = critical, CA:FALSE
+keyUsage = critical, digitalSignature
+extendedKeyUsage = 1.3.6.1.5.5.7.3.36
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = issuer
+
+[ intermediate_name_constraints ]
+basicConstraints = critical, CA:TRUE, pathlen:0
+keyUsage = critical, keyCertSign, cRLSign
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid
+nameConstraints = critical, permitted;DNS:example.com
 
 [ intermediate_no_ca ]
 basicConstraints = critical, CA:FALSE
@@ -184,6 +205,13 @@ issue leaf-under-expired-intermediate ec leaf intermediate-ec-expired ec $VALID_
 issue intermediate-ec-no-ca ec intermediate_no_ca root-ec ec $VALID_FROM $VALID_TO
 issue leaf-under-no-ca-intermediate ec leaf intermediate-ec-no-ca ec $VALID_FROM $VALID_TO
 issue self-signed-leaf ec self_signed_leaf self ec $VALID_FROM $VALID_TO
+issue leaf-ec-not-yet-valid ec leaf intermediate-ec ec $FUTURE_FROM $VALID_TO
+
+# CA certificates that break the profile of C2PA 2.4 §14.5.1.1 or carry an extension the library does not process
+issue intermediate-ec-no-ski ec intermediate_no_ski root-ec ec $VALID_FROM $VALID_TO
+issue leaf-under-no-ski-intermediate ec leaf_aki_issuer intermediate-ec-no-ski ec $VALID_FROM $VALID_TO
+issue intermediate-ec-name-constraints ec intermediate_name_constraints root-ec ec $VALID_FROM $VALID_TO
+issue leaf-under-name-constrained-intermediate ec leaf intermediate-ec-name-constraints ec $VALID_FROM $VALID_TO
 
 # Leaves that break the certificate profile of C2PA 2.4 §14.5.1.1
 issue leaf-ec-ca ec leaf_ca intermediate-ec ec $VALID_FROM $VALID_TO
@@ -206,6 +234,9 @@ issue leaf-ec-forged ec leaf impostor-intermediate-ec ec $VALID_FROM $VALID_TO
 issue root-rsa rsa root self rsa $VALID_FROM $VALID_TO
 issue leaf-rsa rsa leaf root-rsa rsa $VALID_FROM $VALID_TO
 issue leaf-rsa-1024 rsa1024 leaf root-rsa rsa $VALID_FROM $VALID_TO
+# C2PA 2.5 §13.5.1.1 does not apply the key requirements to CA certificates
+issue intermediate-rsa-1024 rsa1024 intermediate root-rsa rsa $VALID_FROM $VALID_TO
+issue leaf-under-rsa-1024-intermediate ec leaf intermediate-rsa-1024 rsa $VALID_FROM $VALID_TO
 issue root-pss pss root self pss $VALID_FROM $VALID_TO
 issue leaf-pss pss leaf root-pss pss $VALID_FROM $VALID_TO
 issue root-ed25519 ed25519 root self ed25519 $VALID_FROM $VALID_TO
@@ -215,7 +246,9 @@ CERTS="root-ec intermediate-ec leaf-ec leaf-ec-claim-signing leaf-ec-no-eku leaf
 	intermediate-ec-expired leaf-under-expired-intermediate intermediate-ec-no-ca leaf-under-no-ca-intermediate
 	self-signed-leaf leaf-ec-forged root-rsa leaf-rsa root-pss leaf-pss root-ed25519 leaf-ed25519
 	leaf-ec-ca leaf-ec-no-digital-signature leaf-ec-no-key-usage leaf-ec-time-stamping leaf-ec-unknown-critical
-	leaf-ec-no-aki leaf-secp256k1 leaf-rsa-1024 sub-intermediate-ec leaf-under-sub-intermediate"
+	leaf-ec-no-aki leaf-secp256k1 leaf-rsa-1024 sub-intermediate-ec leaf-under-sub-intermediate
+	leaf-ec-not-yet-valid intermediate-ec-no-ski leaf-under-no-ski-intermediate intermediate-ec-name-constraints
+	leaf-under-name-constrained-intermediate intermediate-rsa-1024 leaf-under-rsa-1024-intermediate"
 
 {
 	for name in $CERTS; do

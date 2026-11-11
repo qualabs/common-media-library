@@ -18,7 +18,7 @@ import type {
 	InitSegmentValidationOptions,
 	ValidatedSessionKey,
 } from './InitSegmentValidation.ts'
-import { evaluateSignerTrust } from '../trust/evaluateCertificateTrust.ts'
+import { evaluateSignerTrust } from '../trust/evaluateSignerTrust.ts'
 import { validateMerkleMaps } from '../merkle/validateMerkleMaps.ts'
 import {
 	asUnsignedInteger,
